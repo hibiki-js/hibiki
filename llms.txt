@@ -1,0 +1,7 @@
+# Hibiki
+
+Hibiki is a TypeScript webhook framework for Node.js 22+ and Web Standard runtimes. It has zero runtime dependencies in Core and provider packages.
+
+Use `new Hibiki().use(provider)` to create an immutable type-state builder, `on("provider.event", handler)` to register one handler, and `handle(request, { provider })` to verify, parse, and route a request. Core supports Stripe and GitHub provider packages. GitHub accepts JSON payloads only.
+
+Hibiki does not store events, retry deliveries, log payloads, or provide queues. See README.md for the basic example and packages/*/src/index.ts for API documentation.

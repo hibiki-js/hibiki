@@ -1,0 +1,3 @@
+# Hibiki
+
+Node 22+ type-safe webhooks with zero Core/provider runtime dependencies. Register providers with `new Hibiki().use(...)`, handlers with `.on(...)`, and serve with `.handle(request, { provider })`. Stripe and GitHub are supported; GitHub requires `application/json`.
