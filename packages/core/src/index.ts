@@ -132,7 +132,7 @@ export class Hibiki<R extends Registry = {}> {
       catch (error) { if (error instanceof HibikiError) throw error; throw new HibikiError("HIBIKI_PARSE_FAILED", "Webhook payload could not be parsed", 400) }
       if (parsed.kind === "unsupported") {
         if (this.options.strictEvents) throw new HibikiError("HIBIKI_UNSUPPORTED_EVENT", "Unsupported event", 400)
-        return new Response(null, { status: 204 })
+        return new Response(null, { status: 200 })
       }
       const fullName = `${provider.name}.${parsed.eventName}`
       const handler = this.handlers.get(fullName)
