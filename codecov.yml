@@ -16,5 +16,6 @@ ignore:
   - "scripts/**"
   - "**/*.test.ts"
   - "**/dist/**"
+  - "docs/**"
 github_checks:
   annotations: true
