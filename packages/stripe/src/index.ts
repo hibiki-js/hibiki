@@ -1,4 +1,4 @@
-import { defineProvider, HibikiError, type HibikiProvider, type ParseResult } from "@hibiki/core"
+import { defineProvider, HibikiError, type HibikiProvider, type ParseResult } from "@hibiki-js/core"
 
 export interface StripeCheckoutSession { id: string; object: "checkout.session"; [key: string]: unknown }
 export interface StripePaymentIntent { id: string; object: "payment_intent"; [key: string]: unknown }

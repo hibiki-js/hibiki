@@ -28,13 +28,13 @@ importers:
 
   packages/github:
     dependencies:
-      '@hibiki/core':
+      '@hibiki-js/core':
         specifier: workspace:^
         version: link:../core
 
   packages/hono:
     dependencies:
-      '@hibiki/core':
+      '@hibiki-js/core':
         specifier: workspace:^
         version: link:../core
       hono:
@@ -43,13 +43,13 @@ importers:
 
   packages/stripe:
     dependencies:
-      '@hibiki/core':
+      '@hibiki-js/core':
         specifier: workspace:^
         version: link:../core
 
   packages/testing:
     dependencies:
-      '@hibiki/core':
+      '@hibiki-js/core':
         specifier: workspace:^
         version: link:../core
 

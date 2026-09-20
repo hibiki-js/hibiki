@@ -11,11 +11,11 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@hibiki/core": ["packages/core/src/index.ts"],
-      "@hibiki/stripe": ["packages/stripe/src/index.ts"],
-      "@hibiki/github": ["packages/github/src/index.ts"],
-      "@hibiki/hono": ["packages/hono/src/index.ts"],
-      "@hibiki/testing": ["packages/testing/src/index.ts"]
+      "@hibiki-js/core": ["packages/core/src/index.ts"],
+      "@hibiki-js/stripe": ["packages/stripe/src/index.ts"],
+      "@hibiki-js/github": ["packages/github/src/index.ts"],
+      "@hibiki-js/hono": ["packages/hono/src/index.ts"],
+      "@hibiki-js/testing": ["packages/testing/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "examples/**/*.ts"]

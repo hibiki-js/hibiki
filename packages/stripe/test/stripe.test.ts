@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { Hibiki } from "@hibiki/core"
+import { Hibiki } from "@hibiki-js/core"
 import { stripe } from "../src/index.js"
-import { stripeRequest } from "@hibiki/testing"
+import { stripeRequest } from "@hibiki-js/testing"
 
 describe("Stripe provider", () => {
   it("accepts a signed supported event", async () => {

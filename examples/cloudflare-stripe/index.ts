@@ -1,5 +1,5 @@
-import { Hibiki } from "@hibiki/core"
-import { stripe } from "@hibiki/stripe"
+import { Hibiki } from "@hibiki-js/core"
+import { stripe } from "@hibiki-js/stripe"
 
 const webhooks = new Hibiki().use(stripe({ secret: "whsec_example" }))
 webhooks.on("stripe.invoice.paid", ({ event, waitUntil }) => {

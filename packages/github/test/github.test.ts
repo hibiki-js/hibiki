@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { Hibiki } from "@hibiki/core"
+import { Hibiki } from "@hibiki-js/core"
 import { github } from "../src/index.js"
-import { githubRequest } from "@hibiki/testing"
+import { githubRequest } from "@hibiki-js/testing"
 
 describe("GitHub provider", () => {
   it("routes action-level events", async () => {

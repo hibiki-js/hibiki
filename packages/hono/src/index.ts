@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono"
-import type { Hibiki, ProviderRegistry, RegisteredEventName } from "@hibiki/core"
+import type { Hibiki, ProviderRegistry, RegisteredEventName } from "@hibiki-js/core"
 
 /** Adapt a Hibiki application to a Hono route for one registered provider. */
 export function hibiki<R extends ProviderRegistry>(app: Hibiki<R>, provider: Parameters<Hibiki<R>["handle"]>[1]["provider"]): MiddlewareHandler {

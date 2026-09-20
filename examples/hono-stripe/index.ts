@@ -1,7 +1,7 @@
 import { Hono } from "hono"
-import { Hibiki } from "@hibiki/core"
-import { stripe } from "@hibiki/stripe"
-import { hibiki } from "@hibiki/hono"
+import { Hibiki } from "@hibiki-js/core"
+import { stripe } from "@hibiki-js/stripe"
+import { hibiki } from "@hibiki-js/hono"
 
 const webhooks = new Hibiki().use(stripe({ secret: "whsec_example" }))
 webhooks.on("stripe.checkout.session.completed", async (context) => {

@@ -3,8 +3,8 @@
 Type-safe webhooks for TypeScript. Zero runtime dependencies. Built on Web Standards.
 
 ```ts
-import { Hibiki } from "@hibiki/core"
-import { stripe } from "@hibiki/stripe"
+import { Hibiki } from "@hibiki-js/core"
+import { stripe } from "@hibiki-js/stripe"
 
 const app = new Hibiki().use(stripe({ secret: process.env.STRIPE_WEBHOOK_SECRET! }))
 app.on("stripe.checkout.session.completed", async ({ event }) => {
@@ -16,4 +16,4 @@ export const POST = (request: Request) => app.handle(request, { provider: "strip
 
 Hibiki verifies signatures before parsing, preserves the original request body for handlers, and returns 204 for supported events without a handler. Use `strictEvents: true` to reject provider events that Hibiki does not support.
 
-Supported providers: Stripe and GitHub. Hono is available through `@hibiki/hono`; Next.js Route Handlers and Cloudflare Workers call Core directly.
+Supported providers: Stripe and GitHub. Hono is available through `@hibiki-js/hono`; Next.js Route Handlers and Cloudflare Workers call Core directly.

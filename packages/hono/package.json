@@ -1,12 +1,29 @@
 {
-  "name": "@hibiki/hono",
+  "name": "@hibiki-js/hono",
   "version": "0.1.0",
   "type": "module",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "files": ["dist"],
-  "engines": { "node": ">=22" },
-  "scripts": { "build": "tsup src/index.ts --format esm --dts" },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts"
+  },
   "dependencies": {},
   "optionalDependencies": {},
-  "peerDependencies": { "@hibiki/core": "workspace:^", "hono": "^4.0.0" }
+  "peerDependencies": {
+    "@hibiki-js/core": "workspace:^",
+    "hono": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

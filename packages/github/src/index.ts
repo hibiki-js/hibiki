@@ -1,4 +1,4 @@
-import { defineProvider, HibikiError, type HibikiProvider, type ParseResult } from "@hibiki/core"
+import { defineProvider, HibikiError, type HibikiProvider, type ParseResult } from "@hibiki-js/core"
 
 interface Repository { full_name: string; [key: string]: unknown }
 export interface GitHubEvents {

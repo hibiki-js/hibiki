@@ -7,8 +7,8 @@ for (const entry of packages.filter((entry) => entry.isDirectory())) {
   if (Object.keys(pkg.dependencies ?? {}).length || Object.keys(pkg.optionalDependencies ?? {}).length) {
     throw new Error(`${pkg.name} must not declare runtime dependencies`)
   }
-  if (pkg.name === "@hibiki/hono") {
+  if (pkg.name === "@hibiki-js/hono") {
     const peers = Object.keys(pkg.peerDependencies ?? {}).sort().join(",")
-    if (peers !== "@hibiki/core,hono") throw new Error("@hibiki/hono peers must be @hibiki/core and hono")
+    if (peers !== "@hibiki-js/core,hono") throw new Error("@hibiki-js/hono peers must be @hibiki-js/core and hono")
   }
 }

@@ -1,4 +1,4 @@
-import type { Hibiki, ProviderRegistry } from "@hibiki/core"
+import type { Hibiki, ProviderRegistry } from "@hibiki-js/core"
 
 const encoder = new TextEncoder()
 const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
