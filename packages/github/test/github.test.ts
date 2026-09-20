@@ -25,6 +25,33 @@ describe("GitHub provider", () => {
     expect((await app.handle(request, { provider: "github" })).status).toBe(400)
   })
 
+  it("rejects malformed GitHub signature hex", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    const response = await app.handle(new Request("https://hibiki.test/webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-github-event": "push",
+        "x-hub-signature-256": "sha256=abc",
+      },
+      body: JSON.stringify({ ref: "main", repository: { full_name: "hibiki/repo" } }),
+    }), { provider: "github" })
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
+  })
+
+  it("routes pull_request.closed and issues.opened", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let pr = 0
+    let issue = 0
+    app.on("github.pull_request.closed", ({ event }) => { pr = event.pull_request.number })
+    app.on("github.issues.opened", ({ event }) => { issue = event.issue.number })
+    expect((await app.handle(await githubRequest({ action: "closed", pull_request: { number: 9 }, repository: { full_name: "hibiki/repo" } }, "pull_request", "secret"), { provider: "github" })).status).toBe(204)
+    expect(pr).toBe(9)
+    expect((await app.handle(await githubRequest({ action: "opened", issue: { number: 3 }, repository: { full_name: "hibiki/repo" } }, "issues", "secret"), { provider: "github" })).status).toBe(204)
+    expect(issue).toBe(3)
+  })
+
   it("returns 200 for unsupported GitHub events by default", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     const response = await app.handle(await githubRequest({ action: "labeled", issue: { number: 1 }, repository: { full_name: "hibiki/repo" } }, "issues", "secret"), { provider: "github" })

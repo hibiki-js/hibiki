@@ -36,6 +36,29 @@ describe("Stripe provider", () => {
     expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
   })
 
+  it("rejects malformed Stripe signature headers and hex", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    const malformed = new Request("https://hibiki.test/webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "stripe-signature": "nosep,t=,v1=zz,t=1700000000,v1=00",
+      },
+      body: JSON.stringify({ type: "invoice.paid" }),
+    })
+    expect((await app.handle(malformed, { provider: "stripe" })).status).toBe(400)
+
+    const oddHex = new Request("https://hibiki.test/webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "stripe-signature": "t=1700000000,v1=abc",
+      },
+      body: JSON.stringify({ type: "invoice.paid" }),
+    })
+    expect((await app.handle(oddHex, { provider: "stripe" })).status).toBe(400)
+  })
+
   it("accepts a fixed Stripe-compatible HMAC test vector", async () => {
     // Stripe signs `${t}.${rawBody}` with HMAC-SHA256. This locks that exact scheme.
     const secret = "whsec_test_vector"
