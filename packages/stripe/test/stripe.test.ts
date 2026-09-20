@@ -74,7 +74,7 @@ describe("Stripe provider", () => {
 
   it("returns 200 for unsupported Stripe events by default", async () => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
-    const response = await app.handle(await stripeRequest({ id: "evt_3", type: "customer.created", data: { object: { id: "cus_1" } } }, "secret"), { provider: "stripe" })
+    const response = await app.handle(await stripeRequest({ id: "evt_3", type: "radar.early_fraud_warning.created", data: { object: { id: "issfr_1" } } }, "secret"), { provider: "stripe" })
     expect(response.status).toBe(200)
   })
 
@@ -94,5 +94,22 @@ describe("Stripe provider", () => {
       data: { object: { id: "in_typed", object: "invoice" } },
     })
     expect(typed.status).toBe(204)
+  })
+
+  it("routes expanded subscription and charge events", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    const seen: string[] = []
+    app.on("stripe.customer.subscription.created", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.charge.refunded", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.checkout.session.expired", ({ event }) => { seen.push(event.type) })
+    const webhook = createWebhookTest(app, { secrets: { stripe: "secret" } })
+    expect((await webhook.emitEvent("stripe.customer.subscription.created", { id: "sub_1", object: "subscription" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.charge.refunded", { id: "ch_1", object: "charge" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.checkout.session.expired", { id: "cs_1", object: "checkout.session" })).status).toBe(204)
+    expect(seen).toEqual([
+      "customer.subscription.created",
+      "charge.refunded",
+      "checkout.session.expired",
+    ])
   })
 })

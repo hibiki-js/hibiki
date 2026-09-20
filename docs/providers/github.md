@@ -9,11 +9,21 @@ const app = new Hibiki().use(github({
 }))
 ```
 
-Supported events in v0.1:
+Supported events:
 
 - `push`
+- `create`
+- `delete`
 - `pull_request.opened`
 - `pull_request.closed`
+- `pull_request.reopened`
+- `pull_request.synchronize`
 - `issues.opened`
+- `issues.closed`
+- `issues.reopened`
+- `issue_comment.created`
+- `release.published`
+- `workflow_run.completed`
+- `check_suite.completed`
 
-Only `application/json` payloads are accepted.
+Only `application/json` payloads are accepted. Other GitHub events return 200 by default (or 400 with `strictEvents: true`).

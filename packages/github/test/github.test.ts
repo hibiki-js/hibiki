@@ -52,6 +52,19 @@ describe("GitHub provider", () => {
     expect(issue).toBe(3)
   })
 
+  it("routes release, workflow_run, and ref create events", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    const seen: string[] = []
+    app.on("github.release.published", () => { seen.push("release.published") })
+    app.on("github.workflow_run.completed", ({ event }) => { seen.push(event.action) })
+    app.on("github.create", ({ event }) => { seen.push(event.ref_type) })
+    const webhook = createWebhookTest(app, { secrets: { github: "secret" } })
+    expect((await webhook.emitEvent("github.release.published", { action: "published", release: { tag_name: "v1" }, repository: { full_name: "hibiki/repo" } })).status).toBe(204)
+    expect((await webhook.emitEvent("github.workflow_run.completed", { action: "completed", workflow_run: { id: 1, conclusion: "success" }, repository: { full_name: "hibiki/repo" } })).status).toBe(204)
+    expect((await webhook.emitEvent("github.create", { ref: "feature", ref_type: "branch", repository: { full_name: "hibiki/repo" } })).status).toBe(204)
+    expect(seen).toEqual(["release.published", "completed", "branch"])
+  })
+
   it("returns 200 for unsupported GitHub events by default", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     const response = await app.handle(await githubRequest({ action: "labeled", issue: { number: 1 }, repository: { full_name: "hibiki/repo" } }, "issues", "secret"), { provider: "github" })
