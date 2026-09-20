@@ -11,32 +11,54 @@ export interface StripeEvents {
 export interface StripeOptions { secret: string; tolerance?: number }
 
 const encoder = new TextEncoder()
-const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
-const equal = (left: string, right: string) => {
-  if (left.length !== right.length) return false
-  let different = 0
-  for (let i = 0; i < left.length; i++) different |= left.charCodeAt(i) ^ right.charCodeAt(i)
-  return different === 0
+
+function fromHex(value: string): Uint8Array | undefined {
+  if (value.length % 2 !== 0) return undefined
+  const bytes = new Uint8Array(value.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    const nibble = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16)
+    if (Number.isNaN(nibble)) return undefined
+    bytes[i] = nibble
+  }
+  return bytes
 }
 
 /** Create a Stripe provider without requiring the Stripe SDK. */
 export function stripe(options: StripeOptions): HibikiProvider<"stripe", StripeEvents> {
   const tolerance = options.tolerance ?? 300
+  const keyPromise = crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"])
   return defineProvider<"stripe", StripeEvents>({
     name: "stripe",
     async verify({ rawBody, headers }) {
       const header = headers.get("stripe-signature")
       if (!header) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Missing Stripe signature", 400)
-      const values = header.split(",").reduce<Record<string, string[]>>((acc, item) => {
-        const [key, value] = item.split("=", 2); if (key && value) (acc[key] ??= []).push(value); return acc
-      }, {})
-      const timestamp = values.t?.[0]
+      let timestamp: string | undefined
+      const signatures: string[] = []
+      for (const item of header.split(",")) {
+        const separator = item.indexOf("=")
+        if (separator <= 0) continue
+        const key = item.slice(0, separator)
+        const value = item.slice(separator + 1)
+        if (!value) continue
+        if (key === "t") timestamp ??= value
+        else if (key === "v1") signatures.push(value)
+      }
       if (!timestamp || !/^\d+$/.test(timestamp)) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Invalid Stripe signature", 400)
       if (Math.abs(Date.now() / 1000 - Number(timestamp)) > tolerance) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Expired Stripe signature", 400)
-      const signed = new Uint8Array([...encoder.encode(`${timestamp}.`), ...rawBody])
-      const key = await crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
-      const expected = hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, signed as unknown as BufferSource)))
-      if (!(values.v1 ?? []).some((signature) => equal(expected, signature))) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Invalid Stripe signature", 400)
+      const prefix = encoder.encode(`${timestamp}.`)
+      const signed = new Uint8Array(prefix.length + rawBody.length)
+      signed.set(prefix)
+      signed.set(rawBody, prefix.length)
+      const cryptoKey = await keyPromise
+      let valid = false
+      for (const signature of signatures) {
+        const bytes = fromHex(signature)
+        if (bytes && await crypto.subtle.verify("HMAC", cryptoKey, bytes as BufferSource, signed as BufferSource)) {
+          valid = true
+          break
+        }
+      }
+      if (!valid) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Invalid Stripe signature", 400)
     },
     async parse({ text }): Promise<ParseResult<StripeEvents>> {
       const payload: unknown = JSON.parse(text)

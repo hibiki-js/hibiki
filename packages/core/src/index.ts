@@ -80,6 +80,11 @@ export interface HandleOptions<R extends Registry> {
   waitUntil?: (promise: Promise<unknown>) => void
 }
 
+const decoder = new TextDecoder()
+const RESPONSE_UNSUPPORTED = new Response(null, { status: 200 })
+const RESPONSE_NO_CONTENT = new Response(null, { status: 204 })
+const RESPONSE_INTERNAL = new Response("Internal webhook error", { status: 500 })
+
 /** Immutable, type-state webhook application builder. */
 export class Hibiki<R extends Registry = {}> {
   private readonly providers: Map<string, AnyProvider>
@@ -123,33 +128,50 @@ export class Hibiki<R extends Registry = {}> {
       if (!provider) throw new HibikiError("HIBIKI_PROVIDER_NOT_REGISTERED", "Provider is not registered", 500)
       const rawBody = new Uint8Array(await request.clone().arrayBuffer())
       await provider.verify({ rawBody, headers: request.headers, request })
-      const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase()
-      if (provider.contentTypes && (!contentType || !provider.contentTypes.includes(contentType))) {
-        throw new HibikiError("HIBIKI_UNSUPPORTED_CONTENT_TYPE", "Unsupported content type", 415)
+      const contentTypeHeader = request.headers.get("content-type")
+      if (provider.contentTypes) {
+        const contentType = contentTypeHeader?.split(";", 1)[0]?.trim().toLowerCase()
+        if (!contentType || !provider.contentTypes.includes(contentType)) {
+          throw new HibikiError("HIBIKI_UNSUPPORTED_CONTENT_TYPE", "Unsupported content type", 415)
+        }
       }
+      const text = decoder.decode(rawBody)
       let parsed: { kind: "supported"; eventName: string; event: unknown; id?: string } | { kind: "unsupported"; nativeEventName: string | undefined; id?: string }
-      try { parsed = await provider.parse({ rawBody, text: new TextDecoder().decode(rawBody), headers: request.headers, request }) as typeof parsed }
+      try { parsed = await provider.parse({ rawBody, text, headers: request.headers, request }) as typeof parsed }
       catch (error) { if (error instanceof HibikiError) throw error; throw new HibikiError("HIBIKI_PARSE_FAILED", "Webhook payload could not be parsed", 400) }
       if (parsed.kind === "unsupported") {
         if (this.options.strictEvents) throw new HibikiError("HIBIKI_UNSUPPORTED_EVENT", "Unsupported event", 400)
-        return new Response(null, { status: 200 })
+        return RESPONSE_UNSUPPORTED
       }
-      const fullName = `${provider.name}.${parsed.eventName}`
-      const handler = this.handlers.get(fullName)
-      if (!handler) return new Response(null, { status: 204 })
-      const context: HibikiContext = { event: parsed.event, provider: provider.name, request, headers: request.headers, rawBody: new TextDecoder().decode(rawBody), ...(parsed.id ? { id: parsed.id } : {}), ...(options.waitUntil ? { waitUntil: options.waitUntil } : {}) }
+      const handler = this.handlers.get(`${provider.name}.${parsed.eventName}`)
+      if (!handler) return RESPONSE_NO_CONTENT
+      const context: HibikiContext = {
+        event: parsed.event,
+        provider: provider.name,
+        request,
+        headers: request.headers,
+        rawBody: text,
+        ...(parsed.id ? { id: parsed.id } : {}),
+        ...(options.waitUntil ? { waitUntil: options.waitUntil } : {}),
+      }
       let result: Response | void = undefined
-      const run = async (index: number): Promise<void> => {
-        const middleware = this.middlewares[index]
-        if (middleware) await middleware(context, () => run(index + 1))
-        else result = await handler(context)
-      }
-      try { await run(0) } catch { throw new HibikiError("HIBIKI_HANDLER_FAILED", "Webhook handler failed", 500) }
-      const response = result as Response | void
-      return response instanceof Response ? response : new Response(null, { status: 204 })
+      try {
+        if (this.middlewares.length === 0) result = await handler(context)
+        else {
+          const middlewares = this.middlewares
+          let index = 0
+          const dispatch = async (): Promise<void> => {
+            const middleware = middlewares[index++]
+            if (middleware) await middleware(context, dispatch)
+            else result = await handler(context)
+          }
+          await dispatch()
+        }
+      } catch { throw new HibikiError("HIBIKI_HANDLER_FAILED", "Webhook handler failed", 500) }
+      return result instanceof Response ? result : RESPONSE_NO_CONTENT
     } catch (error) {
       if (error instanceof HibikiError) return new Response(error.code, { status: error.status })
-      return new Response("Internal webhook error", { status: 500 })
+      return RESPONSE_INTERNAL
     }
   }
 }
