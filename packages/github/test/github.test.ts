@@ -65,6 +65,18 @@ describe("GitHub provider", () => {
     expect(seen).toEqual(["release.published", "completed", "branch"])
   })
 
+  it("routes delete events and rejects non-object JSON payloads", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let ref = ""
+    app.on("github.delete", ({ event }) => { ref = event.ref })
+    const webhook = createWebhookTest(app, { secrets: { github: "secret" } })
+    expect((await webhook.emitEvent("github.delete", { ref: "old", ref_type: "branch", repository: { full_name: "hibiki/repo" } })).status).toBe(204)
+    expect(ref).toBe("old")
+
+    const invalid = await githubRequest(null, "push", "secret")
+    expect(await (await app.handle(invalid, { provider: "github" })).text()).toBe("HIBIKI_PARSE_FAILED")
+  })
+
   it("returns 200 for unsupported GitHub events by default", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     const response = await app.handle(await githubRequest({ action: "labeled", issue: { number: 1 }, repository: { full_name: "hibiki/repo" } }, "issues", "secret"), { provider: "github" })

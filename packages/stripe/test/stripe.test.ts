@@ -57,6 +57,16 @@ describe("Stripe provider", () => {
       body: JSON.stringify({ type: "invoice.paid" }),
     })
     expect((await app.handle(oddHex, { provider: "stripe" })).status).toBe(400)
+
+    const badTimestamp = new Request("https://hibiki.test/webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "stripe-signature": "t=not-a-number,v1=00",
+      },
+      body: JSON.stringify({ type: "invoice.paid" }),
+    })
+    expect((await app.handle(badTimestamp, { provider: "stripe" })).status).toBe(400)
   })
 
   it("accepts a fixed Stripe-compatible HMAC test vector", async () => {
@@ -111,5 +121,20 @@ describe("Stripe provider", () => {
       "charge.refunded",
       "checkout.session.expired",
     ])
+  })
+
+  it("rejects non-object Stripe JSON and accepts events without ids", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    const invalid = await stripeRequest(null, "secret")
+    expect(await (await app.handle(invalid, { provider: "stripe" })).text()).toBe("HIBIKI_PARSE_FAILED")
+
+    app.on("stripe.customer.updated", ({ event }) => {
+      expect(event.id).toBeUndefined()
+    })
+    const noId = await stripeRequest({ type: "customer.updated", data: { object: { id: "cus_1", object: "customer" } } }, "secret")
+    expect((await app.handle(noId, { provider: "stripe" })).status).toBe(204)
+
+    const noType = await stripeRequest({ id: "evt_x", data: { object: { id: "cus_1" } } }, "secret")
+    expect((await app.handle(noType, { provider: "stripe" })).status).toBe(200)
   })
 })
