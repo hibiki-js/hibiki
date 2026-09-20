@@ -64,5 +64,12 @@ describe("Stripe provider", () => {
     const webhook = createWebhookTest(app, { secrets: { stripe: "whsec_test" } })
     const response = await webhook.emitEvent("stripe.payment_intent.succeeded", { id: "pi_1", object: "payment_intent" })
     expect(response.status).toBe(204)
+
+    const typed = await webhook.emitEvent("stripe.invoice.paid", {
+      id: "evt_typed",
+      type: "invoice.paid",
+      data: { object: { id: "in_typed", object: "invoice" } },
+    })
+    expect(typed.status).toBe(204)
   })
 })

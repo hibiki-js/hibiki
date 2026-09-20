@@ -42,5 +42,14 @@ describe("GitHub provider", () => {
     const response = await webhook.emitEvent("github.push", { ref: "refs/heads/main", repository: { full_name: "hibiki/repo" } })
     expect(response.status).toBe(204)
     expect(name).toBe("hibiki/repo")
+
+    let number = 0
+    app.on("github.pull_request.opened", ({ event }) => { number = event.pull_request.number })
+    const opened = await webhook.emitEvent("github.pull_request.opened", {
+      pull_request: { number: 7 },
+      repository: { full_name: "hibiki/repo" },
+    })
+    expect(opened.status).toBe(204)
+    expect(number).toBe(7)
   })
 })
