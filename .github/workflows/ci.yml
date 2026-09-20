@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
 permissions:
   contents: read
   id-token: write
@@ -21,3 +25,4 @@ jobs:
           files: coverage/lcov.info
           use_oidc: true
           fail_ci_if_error: false
+        if: github.event_name != 'merge_group'
