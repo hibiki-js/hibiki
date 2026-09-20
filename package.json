@@ -6,11 +6,13 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "check:dependencies": "node scripts/check-dependencies.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
     "hono": "^4.7.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",

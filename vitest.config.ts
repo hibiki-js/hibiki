@@ -10,5 +10,13 @@ export default defineConfig({
       "@hibiki-js/testing": fileURLToPath(new URL("./packages/testing/src/index.ts", import.meta.url)),
     },
   },
-  test: { environment: "node" },
+  test: {
+    environment: "node",
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      include: ["packages/*/src/**/*.ts"],
+      exclude: ["packages/*/src/**/*.test.ts", "packages/*/dist/**"],
+    },
+  },
 })
