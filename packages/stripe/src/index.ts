@@ -1,14 +1,87 @@
-import { defineProvider, HibikiError, type HibikiProvider, type ParseResult } from "@hibiki-js/core"
+import { defineProvider, HibikiError, type HibikiProvider, type ParseResult, type SupportedParseResult } from "@hibiki-js/core"
 
-export interface StripeCheckoutSession { id: string; object: "checkout.session"; [key: string]: unknown }
-export interface StripePaymentIntent { id: string; object: "payment_intent"; [key: string]: unknown }
-export interface StripeInvoice { id: string; object: "invoice"; [key: string]: unknown }
-export interface StripeEvents {
-  "checkout.session.completed": { id: string; type: "checkout.session.completed"; data: { object: StripeCheckoutSession } }
-  "payment_intent.succeeded": { id: string; type: "payment_intent.succeeded"; data: { object: StripePaymentIntent } }
-  "invoice.paid": { id: string; type: "invoice.paid"; data: { object: StripeInvoice } }
+type StripeObject<TObject extends string> = { id: string; object: TObject; [key: string]: unknown }
+type StripeEvent<TType extends string, TObject> = {
+  id: string
+  type: TType
+  data: { object: TObject }
+  [key: string]: unknown
 }
+
+export type StripeCheckoutSession = StripeObject<"checkout.session">
+export type StripePaymentIntent = StripeObject<"payment_intent">
+export type StripeInvoice = StripeObject<"invoice">
+export type StripeCustomer = StripeObject<"customer">
+export type StripeSubscription = StripeObject<"subscription">
+export type StripeCharge = StripeObject<"charge">
+export type StripePaymentMethod = StripeObject<"payment_method">
+export type StripeDispute = StripeObject<"dispute">
+
+export interface StripeEvents {
+  "checkout.session.completed": StripeEvent<"checkout.session.completed", StripeCheckoutSession>
+  "checkout.session.expired": StripeEvent<"checkout.session.expired", StripeCheckoutSession>
+  "checkout.session.async_payment_succeeded": StripeEvent<"checkout.session.async_payment_succeeded", StripeCheckoutSession>
+  "checkout.session.async_payment_failed": StripeEvent<"checkout.session.async_payment_failed", StripeCheckoutSession>
+  "payment_intent.succeeded": StripeEvent<"payment_intent.succeeded", StripePaymentIntent>
+  "payment_intent.payment_failed": StripeEvent<"payment_intent.payment_failed", StripePaymentIntent>
+  "payment_intent.canceled": StripeEvent<"payment_intent.canceled", StripePaymentIntent>
+  "payment_intent.requires_action": StripeEvent<"payment_intent.requires_action", StripePaymentIntent>
+  "invoice.paid": StripeEvent<"invoice.paid", StripeInvoice>
+  "invoice.payment_failed": StripeEvent<"invoice.payment_failed", StripeInvoice>
+  "invoice.payment_action_required": StripeEvent<"invoice.payment_action_required", StripeInvoice>
+  "invoice.finalized": StripeEvent<"invoice.finalized", StripeInvoice>
+  "customer.created": StripeEvent<"customer.created", StripeCustomer>
+  "customer.updated": StripeEvent<"customer.updated", StripeCustomer>
+  "customer.deleted": StripeEvent<"customer.deleted", StripeCustomer>
+  "customer.subscription.created": StripeEvent<"customer.subscription.created", StripeSubscription>
+  "customer.subscription.updated": StripeEvent<"customer.subscription.updated", StripeSubscription>
+  "customer.subscription.deleted": StripeEvent<"customer.subscription.deleted", StripeSubscription>
+  "customer.subscription.paused": StripeEvent<"customer.subscription.paused", StripeSubscription>
+  "customer.subscription.resumed": StripeEvent<"customer.subscription.resumed", StripeSubscription>
+  "customer.subscription.trial_will_end": StripeEvent<"customer.subscription.trial_will_end", StripeSubscription>
+  "charge.succeeded": StripeEvent<"charge.succeeded", StripeCharge>
+  "charge.failed": StripeEvent<"charge.failed", StripeCharge>
+  "charge.refunded": StripeEvent<"charge.refunded", StripeCharge>
+  "charge.dispute.created": StripeEvent<"charge.dispute.created", StripeDispute>
+  "payment_method.attached": StripeEvent<"payment_method.attached", StripePaymentMethod>
+  "payment_method.detached": StripeEvent<"payment_method.detached", StripePaymentMethod>
+}
+
 export interface StripeOptions { secret: string; tolerance?: number }
+
+const SUPPORTED_EVENTS = {
+  "checkout.session.completed": true,
+  "checkout.session.expired": true,
+  "checkout.session.async_payment_succeeded": true,
+  "checkout.session.async_payment_failed": true,
+  "payment_intent.succeeded": true,
+  "payment_intent.payment_failed": true,
+  "payment_intent.canceled": true,
+  "payment_intent.requires_action": true,
+  "invoice.paid": true,
+  "invoice.payment_failed": true,
+  "invoice.payment_action_required": true,
+  "invoice.finalized": true,
+  "customer.created": true,
+  "customer.updated": true,
+  "customer.deleted": true,
+  "customer.subscription.created": true,
+  "customer.subscription.updated": true,
+  "customer.subscription.deleted": true,
+  "customer.subscription.paused": true,
+  "customer.subscription.resumed": true,
+  "customer.subscription.trial_will_end": true,
+  "charge.succeeded": true,
+  "charge.failed": true,
+  "charge.refunded": true,
+  "charge.dispute.created": true,
+  "payment_method.attached": true,
+  "payment_method.detached": true,
+} as const satisfies Record<keyof StripeEvents, true>
+
+function isSupportedEvent(type: string): type is keyof StripeEvents {
+  return Object.hasOwn(SUPPORTED_EVENTS, type)
+}
 
 const encoder = new TextEncoder()
 
@@ -65,15 +138,15 @@ export function stripe(options: StripeOptions): HibikiProvider<"stripe", StripeE
       if (!payload || typeof payload !== "object") throw new Error("Invalid JSON")
       const event = payload as { id?: unknown; type?: unknown }
       const id = typeof event.id === "string" ? event.id : undefined
-      switch (event.type) {
-        case "checkout.session.completed":
-          return { kind: "supported", eventName: "checkout.session.completed", event: payload as StripeEvents["checkout.session.completed"], ...(id ? { id } : {}) }
-        case "payment_intent.succeeded":
-          return { kind: "supported", eventName: "payment_intent.succeeded", event: payload as StripeEvents["payment_intent.succeeded"], ...(id ? { id } : {}) }
-        case "invoice.paid":
-          return { kind: "supported", eventName: "invoice.paid", event: payload as StripeEvents["invoice.paid"], ...(id ? { id } : {}) }
-        default: return { kind: "unsupported", nativeEventName: typeof event.type === "string" ? event.type : undefined, ...(id ? { id } : {}) }
+      if (typeof event.type === "string" && isSupportedEvent(event.type)) {
+        return {
+          kind: "supported",
+          eventName: event.type,
+          event: payload as StripeEvents[typeof event.type],
+          ...(id ? { id } : {}),
+        } as SupportedParseResult<StripeEvents>
       }
+      return { kind: "unsupported", nativeEventName: typeof event.type === "string" ? event.type : undefined, ...(id ? { id } : {}) }
     },
   })
 }
