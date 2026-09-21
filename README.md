@@ -115,7 +115,9 @@ See [`examples/`](./examples).
 
 ## Documentation
 
-- [Getting Started](./docs/guide/getting-started.md) (`pnpm docs:dev`)
+Site: https://hibiki-js.github.io (`pnpm docs:dev`)
+
+- [Getting Started](./docs/guide/getting-started.md)
 - [Stripe](./docs/providers/stripe.md)
 - [GitHub](./docs/providers/github.md)
 - [Hono](./docs/integrations/hono.md)

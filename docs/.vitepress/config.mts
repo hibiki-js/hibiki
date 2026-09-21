@@ -62,9 +62,14 @@ function sidebar(prefix = ""): DefaultTheme.Sidebar {
 export default defineConfig({
   title: "Hibiki",
   description: "Type-safe webhooks for TypeScript",
+  // Published at https://hibiki-js.github.io (org root site)
+  base: "/",
   cleanUrls: true,
   lastUpdated: true,
   ignoreDeadLinks: true,
+  sitemap: {
+    hostname: "https://hibiki-js.github.io",
+  },
   head: [
     ["link", { rel: "icon", type: "image/png", href: "/favicon.png" }],
     ["link", { rel: "apple-touch-icon", href: "/logo.png" }],
