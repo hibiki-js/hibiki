@@ -66,7 +66,6 @@ export default defineConfig({
   base: "/",
   cleanUrls: true,
   lastUpdated: true,
-  ignoreDeadLinks: true,
   sitemap: {
     hostname: "https://hibiki-js.github.io",
   },
