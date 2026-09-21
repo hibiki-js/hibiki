@@ -29,6 +29,8 @@ Supported events:
 - `invoice.payment_failed`
 - `invoice.payment_action_required`
 - `invoice.finalized`
+- `invoice.upcoming`
+- `invoice.created`
 
 ### Customer / Subscription
 - `customer.created`
@@ -41,12 +43,19 @@ Supported events:
 - `customer.subscription.resumed`
 - `customer.subscription.trial_will_end`
 
-### Charge / PaymentMethod
+### Charge / Dispute / Refund / PaymentMethod
 - `charge.succeeded`
 - `charge.failed`
 - `charge.refunded`
 - `charge.dispute.created`
+- `charge.dispute.updated`
+- `charge.dispute.closed`
+- `refund.created`
+- `refund.updated`
 - `payment_method.attached`
 - `payment_method.detached`
+
+### SetupIntent
+- `setup_intent.succeeded`
 
 Signature verification uses Web Crypto HMAC-SHA256 and does not depend on the Stripe SDK. Other Stripe events return 200 by default (or 400 with `strictEvents: true`).
