@@ -27,4 +27,4 @@ Hibiki verifies signatures before parsing, preserves the original request body f
 
 Supported providers: Stripe and GitHub. Hono is available through `@hibiki-js/hono`; Next.js Route Handlers and Cloudflare Workers call Core directly.
 
-Docs: [Getting Started](./docs/getting-started.md)
+Docs: [Getting Started](./docs/guide/getting-started.md) (`pnpm docs:dev`)

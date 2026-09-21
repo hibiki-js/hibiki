@@ -8,4 +8,4 @@
  * Usage (future):
  *   pnpm generate:types
  */
-console.log("No generated provider types yet. See docs/guides/generated-types.md")
+console.log("No generated provider types yet. Event maps live in packages/*/src/index.ts.")
