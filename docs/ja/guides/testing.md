@@ -1,6 +1,6 @@
-# Testing
+# テスト
 
-`@hibiki-js/testing` builds correctly signed requests so you can exercise `handle()` without talking to Stripe or GitHub.
+`@hibiki-js/testing` は、Stripe / GitHub と通信せずに `handle()` を試せるよう、正しく署名されたリクエストを組み立てます。
 
 ```ts
 import { Hibiki } from "@hibiki-js/core"
@@ -21,6 +21,6 @@ await webhook.emitEvent("stripe.checkout.session.completed", {
 })
 ```
 
-Low-level helpers `stripeRequest` and `githubRequest` are available when you need full control over headers and timestamps.
+ヘッダーやタイムスタンプを細かく制御したいときは、低レベルな `stripeRequest` / `githubRequest` も使えます。
 
-See the [testing reference](/reference/testing) for the full API.
+API の全体は [testing リファレンス](/ja/reference/testing) を参照してください。

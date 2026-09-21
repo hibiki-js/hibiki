@@ -1,0 +1,34 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-pages:
+    if: github.repository == 'hibiki-js/hibiki'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger hibiki-js.github.io deploy
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "DOCS_DEPLOY_TOKEN is not set."
+            echo "Create a classic PAT (workflow scope) or fine-grained token with Actions:write on hibiki-js/hibiki-js.github.io,"
+            echo "then add it as the DOCS_DEPLOY_TOKEN secret on hibiki-js/hibiki."
+            echo "Until then, run 'Deploy docs' manually on hibiki-js/hibiki-js.github.io."
+            exit 0
+          fi
+          gh workflow run deploy.yml \
+            --repo hibiki-js/hibiki-js.github.io \
+            -f ref="${{ github.sha }}"

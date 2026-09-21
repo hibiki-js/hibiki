@@ -4,3 +4,5 @@ dist/
 coverage/
 .npmrc
 .pnpm-store/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

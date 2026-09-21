@@ -10,9 +10,9 @@ const app = new Hibiki().use(stripe({
 }))
 ```
 
-Signature verification uses Web Crypto HMAC-SHA256 and does not depend on the Stripe SDK. Other Stripe events return 200 by default (or 400 with `strictEvents: true`).
+署名検証は Web Crypto の HMAC-SHA256 を使い、Stripe SDK には依存しません。その他の Stripe イベントはデフォルトで 200（`strictEvents: true` なら 400）です。
 
-## Supported events
+## 対応イベント
 
 ### Checkout
 
@@ -66,7 +66,7 @@ Signature verification uses Web Crypto HMAC-SHA256 and does not depend on the St
 
 - `setup_intent.succeeded`
 
-Handlers are registered with the `stripe.` prefix:
+ハンドラは `stripe.` プレフィックスで登録します。
 
 ```ts
 app.on("stripe.payment_intent.succeeded", async ({ event }) => {
@@ -74,4 +74,4 @@ app.on("stripe.payment_intent.succeeded", async ({ event }) => {
 })
 ```
 
-See the [API reference](/reference/stripe) for options and exported types.
+オプションと型の詳細は [API リファレンス](/ja/reference/stripe) を参照してください。

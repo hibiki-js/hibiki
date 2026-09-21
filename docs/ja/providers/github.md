@@ -9,9 +9,9 @@ const app = new Hibiki().use(github({
 }))
 ```
 
-Only `application/json` payloads are accepted. Other GitHub events return 200 by default (or 400 with `strictEvents: true`).
+受け付けるのは `application/json` のみです。その他の GitHub イベントはデフォルトで 200（`strictEvents: true` なら 400）です。
 
-## Supported events
+## 対応イベント
 
 - `push`
 - `ping`
@@ -36,7 +36,7 @@ Only `application/json` payloads are accepted. Other GitHub events return 200 by
 - `deployment.created`
 - `deployment_status.created`
 
-Handlers use the `github.` prefix:
+ハンドラは `github.` プレフィックスを使います。
 
 ```ts
 app.on("github.pull_request.opened", async ({ event }) => {
@@ -44,4 +44,4 @@ app.on("github.pull_request.opened", async ({ event }) => {
 })
 ```
 
-See the [API reference](/reference/github) for options and exported types.
+オプションと型の詳細は [API リファレンス](/ja/reference/github) を参照してください。
