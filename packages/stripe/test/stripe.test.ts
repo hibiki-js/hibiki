@@ -123,6 +123,35 @@ describe("Stripe provider", () => {
     ])
   })
 
+  it("routes high-demand invoice, dispute, refund, and setup_intent events", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    const seen: string[] = []
+    app.on("stripe.invoice.upcoming", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.invoice.created", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.charge.dispute.updated", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.charge.dispute.closed", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.refund.created", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.refund.updated", ({ event }) => { seen.push(event.type) })
+    app.on("stripe.setup_intent.succeeded", ({ event }) => { seen.push(event.type) })
+    const webhook = createWebhookTest(app, { secrets: { stripe: "secret" } })
+    expect((await webhook.emitEvent("stripe.invoice.upcoming", { id: "in_upcoming", object: "invoice" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.invoice.created", { id: "in_created", object: "invoice" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.charge.dispute.updated", { id: "dp_1", object: "dispute" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.charge.dispute.closed", { id: "dp_2", object: "dispute" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.refund.created", { id: "re_1", object: "refund" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.refund.updated", { id: "re_2", object: "refund" })).status).toBe(204)
+    expect((await webhook.emitEvent("stripe.setup_intent.succeeded", { id: "seti_1", object: "setup_intent" })).status).toBe(204)
+    expect(seen).toEqual([
+      "invoice.upcoming",
+      "invoice.created",
+      "charge.dispute.updated",
+      "charge.dispute.closed",
+      "refund.created",
+      "refund.updated",
+      "setup_intent.succeeded",
+    ])
+  })
+
   it("rejects non-object Stripe JSON and accepts events without ids", async () => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
     const invalid = await stripeRequest(null, "secret")

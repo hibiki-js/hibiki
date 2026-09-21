@@ -34,6 +34,8 @@ Signature verification uses Web Crypto HMAC-SHA256 and does not depend on the St
 - `invoice.payment_failed`
 - `invoice.payment_action_required`
 - `invoice.finalized`
+- `invoice.upcoming`
+- `invoice.created`
 
 ### Customer / Subscription
 
@@ -47,14 +49,22 @@ Signature verification uses Web Crypto HMAC-SHA256 and does not depend on the St
 - `customer.subscription.resumed`
 - `customer.subscription.trial_will_end`
 
-### Charge / PaymentMethod
+### Charge / Dispute / Refund / PaymentMethod
 
 - `charge.succeeded`
 - `charge.failed`
 - `charge.refunded`
 - `charge.dispute.created`
+- `charge.dispute.updated`
+- `charge.dispute.closed`
+- `refund.created`
+- `refund.updated`
 - `payment_method.attached`
 - `payment_method.detached`
+
+### SetupIntent
+
+- `setup_intent.succeeded`
 
 Handlers are registered with the `stripe.` prefix:
 

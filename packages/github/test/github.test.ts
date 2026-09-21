@@ -65,6 +65,53 @@ describe("GitHub provider", () => {
     expect(seen).toEqual(["release.published", "completed", "branch"])
   })
 
+  it("routes high-demand review, CI, PR, and deployment events", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    const seen: string[] = []
+    app.on("github.pull_request_review.submitted", ({ event }) => { seen.push(event.review.state) })
+    app.on("github.check_run.completed", ({ event }) => { seen.push(event.check_run.conclusion ?? "null") })
+    app.on("github.pull_request.ready_for_review", ({ event }) => { seen.push(`ready:${event.pull_request.number}`) })
+    app.on("github.pull_request.labeled", ({ event }) => { seen.push(event.label.name) })
+    app.on("github.workflow_job.completed", ({ event }) => { seen.push(`job:${event.workflow_job.id}`) })
+    app.on("github.deployment.created", ({ event }) => { seen.push(event.deployment.environment) })
+    app.on("github.deployment_status.created", ({ event }) => { seen.push(event.deployment_status.state) })
+    app.on("github.ping", ({ event }) => { seen.push(event.zen) })
+    const webhook = createWebhookTest(app, { secrets: { github: "secret" } })
+    expect((await webhook.emitEvent("github.pull_request_review.submitted", {
+      review: { id: 1, state: "approved" },
+      pull_request: { number: 10 },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.check_run.completed", {
+      check_run: { id: 2, conclusion: "success" },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.pull_request.ready_for_review", {
+      pull_request: { number: 11 },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.pull_request.labeled", {
+      pull_request: { number: 12 },
+      label: { name: "ready" },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.workflow_job.completed", {
+      workflow_job: { id: 3, conclusion: "success" },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.deployment.created", {
+      deployment: { id: 4, environment: "production" },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.deployment_status.created", {
+      deployment_status: { id: 5, state: "success" },
+      deployment: { id: 4, environment: "production" },
+      repository: { full_name: "hibiki/repo" },
+    })).status).toBe(204)
+    expect((await webhook.emitEvent("github.ping", { zen: "Keep it logically awesome." })).status).toBe(204)
+    expect(seen).toEqual(["approved", "success", "ready:11", "ready", "job:3", "production", "success", "Keep it logically awesome."])
+  })
+
   it("routes delete events and rejects non-object JSON payloads", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     let ref = ""

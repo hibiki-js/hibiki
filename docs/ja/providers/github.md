@@ -14,19 +14,27 @@ const app = new Hibiki().use(github({
 ## 対応イベント
 
 - `push`
+- `ping`
 - `create`
 - `delete`
 - `pull_request.opened`
 - `pull_request.closed`
 - `pull_request.reopened`
 - `pull_request.synchronize`
+- `pull_request.ready_for_review`
+- `pull_request.labeled`
+- `pull_request_review.submitted`
 - `issues.opened`
 - `issues.closed`
 - `issues.reopened`
 - `issue_comment.created`
 - `release.published`
 - `workflow_run.completed`
+- `workflow_job.completed`
 - `check_suite.completed`
+- `check_run.completed`
+- `deployment.created`
+- `deployment_status.created`
 
 ハンドラは `github.` プレフィックスを使います。
 

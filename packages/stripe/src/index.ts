@@ -16,6 +16,8 @@ export type StripeSubscription = StripeObject<"subscription">
 export type StripeCharge = StripeObject<"charge">
 export type StripePaymentMethod = StripeObject<"payment_method">
 export type StripeDispute = StripeObject<"dispute">
+export type StripeRefund = StripeObject<"refund">
+export type StripeSetupIntent = StripeObject<"setup_intent">
 
 export interface StripeEvents {
   "checkout.session.completed": StripeEvent<"checkout.session.completed", StripeCheckoutSession>
@@ -30,6 +32,8 @@ export interface StripeEvents {
   "invoice.payment_failed": StripeEvent<"invoice.payment_failed", StripeInvoice>
   "invoice.payment_action_required": StripeEvent<"invoice.payment_action_required", StripeInvoice>
   "invoice.finalized": StripeEvent<"invoice.finalized", StripeInvoice>
+  "invoice.upcoming": StripeEvent<"invoice.upcoming", StripeInvoice>
+  "invoice.created": StripeEvent<"invoice.created", StripeInvoice>
   "customer.created": StripeEvent<"customer.created", StripeCustomer>
   "customer.updated": StripeEvent<"customer.updated", StripeCustomer>
   "customer.deleted": StripeEvent<"customer.deleted", StripeCustomer>
@@ -43,6 +47,11 @@ export interface StripeEvents {
   "charge.failed": StripeEvent<"charge.failed", StripeCharge>
   "charge.refunded": StripeEvent<"charge.refunded", StripeCharge>
   "charge.dispute.created": StripeEvent<"charge.dispute.created", StripeDispute>
+  "charge.dispute.updated": StripeEvent<"charge.dispute.updated", StripeDispute>
+  "charge.dispute.closed": StripeEvent<"charge.dispute.closed", StripeDispute>
+  "refund.created": StripeEvent<"refund.created", StripeRefund>
+  "refund.updated": StripeEvent<"refund.updated", StripeRefund>
+  "setup_intent.succeeded": StripeEvent<"setup_intent.succeeded", StripeSetupIntent>
   "payment_method.attached": StripeEvent<"payment_method.attached", StripePaymentMethod>
   "payment_method.detached": StripeEvent<"payment_method.detached", StripePaymentMethod>
 }
@@ -62,6 +71,8 @@ const SUPPORTED_EVENTS = {
   "invoice.payment_failed": true,
   "invoice.payment_action_required": true,
   "invoice.finalized": true,
+  "invoice.upcoming": true,
+  "invoice.created": true,
   "customer.created": true,
   "customer.updated": true,
   "customer.deleted": true,
@@ -75,6 +86,11 @@ const SUPPORTED_EVENTS = {
   "charge.failed": true,
   "charge.refunded": true,
   "charge.dispute.created": true,
+  "charge.dispute.updated": true,
+  "charge.dispute.closed": true,
+  "refund.created": true,
+  "refund.updated": true,
+  "setup_intent.succeeded": true,
   "payment_method.attached": true,
   "payment_method.detached": true,
 } as const satisfies Record<keyof StripeEvents, true>
