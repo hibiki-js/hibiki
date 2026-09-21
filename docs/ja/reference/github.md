@@ -1,6 +1,6 @@
 # `@hibiki-js/github`
 
-厳選したイベント型と Web Crypto 署名検証を持つ GitHub Webhook プロバイダーです。
+Hibiki 向けの公式 GitHub Webhook プロバイダーです。`X-Hub-Signature-256` を Web Crypto で検証し、よく使う JSON イベントを型付きで公開します。Octokit には**依存しません**。
 
 ## インストール
 
@@ -8,28 +8,92 @@
 pnpm add @hibiki-js/core @hibiki-js/github
 ```
 
+## 短い例
+
+```ts
+import { Hibiki } from "@hibiki-js/core"
+import { github } from "@hibiki-js/github"
+
+const app = new Hibiki().use(github({
+  secret: process.env.GITHUB_WEBHOOK_SECRET!,
+}))
+
+app.on("github.pull_request.opened", async ({ event }) => {
+  console.log(event.pull_request.number, event.repository.full_name)
+})
+
+export async function POST(request: Request) {
+  return app.handle(request, { provider: "github" })
+}
+```
+
+ハンドラは `github.` プレフィックスを使います。action 付きの配信は、`github.pull_request.opened` のようにドット区切りになります（ヘッダー `X-GitHub-Event: pull_request` + ペイロード `action: "opened"`）。
+
 ## `github(options)`
 
 ```ts
 import { github } from "@hibiki-js/github"
 
-github({
+const provider = github({
   secret: string,
 })
 ```
 
 戻り値は `HibikiProvider<"github", GitHubEvents>` です。
 
-## エクスポートされる型
+| オプション | 型 | 説明 |
+| --- | --- | --- |
+| `secret` | `string` | GitHub App またはリポジトリ Webhook に設定したシークレット |
 
-- `GitHubEvents`
-- `GitHubOptions`
+### 検証
+
+1. `sha256=` で始まる `X-Hub-Signature-256` を必須にする
+2. 接頭辞以降の hex をデコードする
+3. 共有シークレットで生 body の HMAC-SHA256 を検証する
+
+失敗時は `HIBIKI_VERIFICATION_FAILED`（`400`）の `HibikiError` です。
+
+### Content-Type
+
+このプロバイダーは `contentTypes: ["application/json"]` を設定します。署名が通ったあと、それ以外のメディアタイプは `415` / `HIBIKI_UNSUPPORTED_CONTENT_TYPE` で拒否します。form-urlencoded の GitHub ペイロードには対応していません。
+
+### パース
+
+1. body を `JSON.parse`（オブジェクト以外は `HIBIKI_PARSE_FAILED`）
+2. `X-GitHub-Event` を読む
+3. 単純イベント（`push`、`ping`、`create`、`delete`）はそのまま対応付ける
+4. action イベントは `(event, action)` の組（例: `pull_request` + `opened`）で照合する
+5. それ以外は `{ kind: "unsupported" }` → 既定で HTTP `200`
+
+## イベント名の対応
+
+| GitHub の配信 | Hibiki のイベント名 |
+| --- | --- |
+| `X-GitHub-Event: push` | `github.push` |
+| `X-GitHub-Event: ping` | `github.ping` |
+| `pull_request` + `action: "opened"` | `github.pull_request.opened` |
+| `pull_request_review` + `action: "submitted"` | `github.pull_request_review.submitted` |
+| `workflow_job` + `action: "completed"` | `github.workflow_job.completed` |
+
+ペイロード型は必須フィールド（`repository.full_name`、`pull_request.number` など）と、残りの index signature だけの薄い型です。
+
+## export する型
+
+| Export | 説明 |
+| --- | --- |
+| `github` | プロバイダー工場関数 |
+| `GitHubEvents` | 対応イベント名 → ペイロード型 |
+| `GitHubOptions` | `{ secret: string }` |
 
 ## 補足
 
-- Octokit 依存なし
-- `X-Hub-Signature-256` を検証
-- `application/json` のみ受付
-- アクション付きイベントは `pull_request.opened` や `issues.closed` のようにキー付け
+- Octokit 非依存
+- JSON Webhook のみ
+- 未対応の GitHub イベント（未収録の action 含む）は、Core の `strictEvents` が無い限り `200`
+- 署名付きフィクスチャには `@hibiki-js/testing`（`githubRequest` / `createWebhookTest`）を使う
 
-対応イベント一覧は [GitHub プロバイダーガイド](/ja/providers/github) を参照してください。
+## 関連
+
+- [GitHub プロバイダーガイド](/ja/providers/github) — 対応イベント一覧
+- [Hono + GitHub の例](https://github.com/hibiki-js/hibiki/tree/main/examples/hono-github)
+- [Core リファレンス](/ja/reference/core) — `handle`・応答・エラー
