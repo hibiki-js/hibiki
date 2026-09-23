@@ -5,6 +5,7 @@ import { discord } from "../src/index.js"
 const encoder = new TextEncoder()
 const hex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("")
 
+/** Generate an ephemeral Ed25519 key pair for Discord signature tests. */
 async function keyPair() {
   const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])
   return {
@@ -13,7 +14,8 @@ async function keyPair() {
   }
 }
 
-async function request(payload: unknown, privateKey: CryptoKey, timestamp = "1700000000") {
+/** Create a Discord-compatible signed JSON interaction request. */
+async function request(payload: unknown, privateKey: CryptoKey, timestamp = String(Math.floor(Date.now() / 1000))) {
   const body = JSON.stringify(payload)
   const signed = encoder.encode(timestamp + body)
   const signature = hex(new Uint8Array(await crypto.subtle.sign("Ed25519", privateKey, signed as BufferSource)))
@@ -30,9 +32,11 @@ describe("Discord provider", () => {
     app.on("discord.application_command", ({ event }) => {
       expectTypeOf(event.type).toEqualTypeOf<2>()
       name = event.data?.name as string
+      return Response.json({ type: 4, data: { content: "hello" } })
     })
     const response = await app.handle(await request({ id: "1", application_id: "app", type: 2, data: { name: "hello" } }, keys.privateKey), { provider: "discord" })
-    expect(response.status).toBe(204)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ type: 4, data: { content: "hello" } })
     expect(name).toBe("hello")
   })
 
@@ -57,6 +61,18 @@ describe("Discord provider", () => {
     expect((await app.handle(modified, { provider: "discord" })).status).toBe(401)
   })
 
+  it("rejects expired and replayed interactions", async () => {
+    const keys = await keyPair()
+    const app = new Hibiki().use(discord({ publicKey: keys.publicKey, tolerance: 60 }))
+    const payload = { id: "1", application_id: "app", type: 2 }
+    const stale = await request(payload, keys.privateKey, String(Math.floor(Date.now() / 1000) - 61))
+    expect((await app.handle(stale, { provider: "discord" })).status).toBe(401)
+    const first = await request(payload, keys.privateKey)
+    expect((await app.handle(first, { provider: "discord" })).status).toBe(204)
+    const replay = await request(payload, keys.privateKey)
+    expect((await app.handle(replay, { provider: "discord" })).status).toBe(200)
+  })
+
   it("rejects non-JSON content after signature verification and ignores unknown types", async () => {
     const keys = await keyPair()
     const app = new Hibiki().use(discord({ publicKey: keys.publicKey }))
@@ -68,5 +84,6 @@ describe("Discord provider", () => {
 
   it("validates the configured public key", () => {
     expect(() => discord({ publicKey: "not-a-key" })).toThrow("publicKey")
+    expect(() => discord({ publicKey: "00".repeat(32), tolerance: -1 })).toThrow("tolerance")
   })
 })

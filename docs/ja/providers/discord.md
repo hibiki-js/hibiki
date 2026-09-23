@@ -33,6 +33,6 @@ export const POST = (request: Request) => app.handle(request, { provider: "disco
 - `application_command_autocomplete`
 - `modal_submit`
 
-ペイロードは `application/json` のみ受け付けます。Hibiki はパース前に、`X-Signature-Timestamp` と生のリクエストボディを連結したバイト列に対して `X-Signature-Ed25519` を検証します。未対応の Interaction type はデフォルトで200を返します（`strictEvents: true` では400）。
+ペイロードは `application/json` のみ受け付けます。Hibiki はパース前に、`X-Signature-Timestamp` と生のリクエストボディを連結したバイト列に対して `X-Signature-Ed25519` を検証します。署名はデフォルトで5分を超えると拒否し、同じInteraction IDは同じプロバイダーインスタンス内でその期間中に再処理しません。複数インスタンスにまたがる場合は、アプリケーション側で永続的な冪等性制御も行ってください。未対応の Interaction type はデフォルトで200を返します（`strictEvents: true` では400）。
 
 オプションと型の詳細は [API リファレンス](/ja/reference/discord) を参照してください。

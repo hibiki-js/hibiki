@@ -33,6 +33,6 @@ Set the resulting public URL as the **Interactions Endpoint URL** in the Discord
 - `application_command_autocomplete`
 - `modal_submit`
 
-All payloads must be `application/json`. Hibiki verifies `X-Signature-Ed25519` against the raw bytes of `X-Signature-Timestamp` concatenated with the raw request body, before parsing it. Unsupported interaction types return 200 by default (or 400 with `strictEvents: true`).
+All payloads must be `application/json`. Hibiki verifies `X-Signature-Ed25519` against the raw bytes of `X-Signature-Timestamp` concatenated with the raw request body, before parsing it. Signatures older than five minutes are rejected by default, and duplicate interaction IDs are ignored for that same period within a provider instance. Use durable application-level idempotency when requests can reach multiple instances. Unsupported interaction types return 200 by default (or 400 with `strictEvents: true`).
 
 For options and exported types, see the [API reference](/reference/discord).

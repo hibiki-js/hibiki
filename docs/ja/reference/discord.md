@@ -21,8 +21,11 @@ const provider = discord({
 | オプション | 型 | 説明 |
 | --- | --- | --- |
 | `publicKey` | `string` | Discord Developer Portal に表示される64文字の16進数公開鍵 |
+| `tolerance` | `number` | 受け付ける署名の最大経過秒数。デフォルトは `300` |
 
 Discord のエンドポイント検証には、`discord.ping` から `{ type: 1 }` を返す必要があります。コマンドやコンポーネントのハンドラでは、たとえば `{ type: 4, data: { content: "Hello" } }` のような [Interaction Response](https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-response-object) JSON を返してください。
+
+プロバイダーは許容時間内で重複するInteraction IDをメモリ上で抑止します。複数インスタンスにまたがる環境では、アプリケーション側でも永続的な冪等性制御を行ってください。
 
 ## イベント名
 

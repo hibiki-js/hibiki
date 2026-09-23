@@ -21,8 +21,11 @@ Returns `HibikiProvider<"discord", DiscordEvents>`.
 | Option | Type | Description |
 | --- | --- | --- |
 | `publicKey` | `string` | The 64-character hexadecimal public key from the Discord Developer Portal |
+| `tolerance` | `number` | Maximum accepted signature age in seconds; defaults to `300` |
 
 `discord.ping` must return `{ type: 1 }` for Discord's endpoint validation. Command and component handlers should return the appropriate [Interaction Response](https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-response-object) JSON, for example `{ type: 4, data: { content: "Hello" } }`.
+
+The provider also suppresses duplicate interaction IDs in memory for the tolerance window. For multi-instance deployments, use durable application-level idempotency as well.
 
 ## Event names
 
