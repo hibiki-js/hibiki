@@ -64,6 +64,7 @@ Provider-specific verification and parsing stay inside the provider package.
 | --- | --- |
 | Stripe | `@hibiki-js/stripe` |
 | GitHub | `@hibiki-js/github` |
+| Discord Interactions | `@hibiki-js/discord` |
 
 ## Integrations
 
@@ -120,5 +121,6 @@ Site: https://hibiki-js.github.io (`pnpm docs:dev`)
 - [Getting Started](./docs/guide/getting-started.md)
 - [Stripe](./docs/providers/stripe.md)
 - [GitHub](./docs/providers/github.md)
+- [Discord](./docs/providers/discord.md)
 - [Hono](./docs/integrations/hono.md)
 - [Testing](./docs/guides/testing.md)

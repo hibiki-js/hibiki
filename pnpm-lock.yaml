@@ -32,6 +32,12 @@ importers:
 
   packages/core: {}
 
+  packages/discord:
+    dependencies:
+      '@hibiki-js/core':
+        specifier: workspace:^
+        version: link:../core
+
   packages/github:
     dependencies:
       '@hibiki-js/core':
