@@ -31,6 +31,7 @@ function sidebar(prefix = ""): DefaultTheme.Sidebar {
       items: [
         { text: "Stripe", link: `${prefix}/providers/stripe` },
         { text: "GitHub", link: `${prefix}/providers/github` },
+        { text: "Discord", link: `${prefix}/providers/discord` },
       ],
     },
     {
@@ -52,6 +53,7 @@ function sidebar(prefix = ""): DefaultTheme.Sidebar {
         { text: "@hibiki-js/core", link: `${prefix}/reference/core` },
         { text: "@hibiki-js/stripe", link: `${prefix}/reference/stripe` },
         { text: "@hibiki-js/github", link: `${prefix}/reference/github` },
+        { text: "@hibiki-js/discord", link: `${prefix}/reference/discord` },
         { text: "@hibiki-js/hono", link: `${prefix}/reference/hono` },
         { text: "@hibiki-js/testing", link: `${prefix}/reference/testing` },
       ],
