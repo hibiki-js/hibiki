@@ -77,13 +77,36 @@ This provider sets `contentTypes: ["application/json"]`. After a valid signature
 
 Payload types keep a few required fields (`repository.full_name`, `pull_request.number`, …) plus an index signature for the rest of GitHub's JSON. They are intentionally thin.
 
+## Sending signed deliveries
+
+`createGitHubWebhook(url, { secret })` sends GitHub-compatible signed JSON to any webhook URL. For action events, use the dotted Hibiki event name; the sender derives the native `X-GitHub-Event` header from it.
+
+```ts
+import { createGitHubWebhook } from "@hibiki-js/github"
+
+const sender = createGitHubWebhook(process.env.WEBHOOK_URL!, {
+  secret: process.env.WEBHOOK_SECRET!,
+})
+const response = await sender.send("pull_request.opened", {
+  action: "opened",
+  pull_request: { number: 42 },
+  repository: { full_name: "acme/app" },
+})
+if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`)
+```
+
+`send` signs the exact JSON body with HMAC-SHA256, sets `X-GitHub-Event` and `X-Hub-Signature-256`, and returns the receiver's successful `Response`. HTTP errors and network failures throw. This sends GitHub-compatible requests to your URL; it does not create or deliver events through GitHub itself.
+
 ## Exported types
 
 | Export | Description |
 | --- | --- |
 | `github` | Provider factory |
+| `createGitHubWebhook` | Create a signed webhook sender |
 | `GitHubEvents` | Map of supported event name → payload type |
 | `GitHubOptions` | `{ secret: string }` |
+| `GitHubWebhookSender` | Typed sender for supported webhook events |
+| `GitHubWebhookSenderOptions` | Sender secret and optional custom `fetch` |
 
 ## Notes
 

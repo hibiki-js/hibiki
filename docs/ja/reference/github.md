@@ -77,13 +77,36 @@ const provider = github({
 
 ペイロード型は必須フィールド（`repository.full_name`、`pull_request.number` など）と、残りの index signature だけの薄い型です。
 
+## 署名付き配信の送信
+
+`createGitHubWebhook(url, { secret })` は、GitHub互換の署名付きJSONを任意のWebhook URLへ送信します。action イベントにはドット区切りの Hibiki イベント名を渡します。送信時に `X-GitHub-Event` の値を自動で求めます。
+
+```ts
+import { createGitHubWebhook } from "@hibiki-js/github"
+
+const sender = createGitHubWebhook(process.env.WEBHOOK_URL!, {
+  secret: process.env.WEBHOOK_SECRET!,
+})
+const response = await sender.send("pull_request.opened", {
+  action: "opened",
+  pull_request: { number: 42 },
+  repository: { full_name: "acme/app" },
+})
+if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`)
+```
+
+`send` はJSON本文のHMAC-SHA256署名を作成し、`X-GitHub-Event` と `X-Hub-Signature-256` を設定して、成功時に受信側の `Response` を返します。HTTPエラーとネットワークエラーは例外になります。この機能は任意URLへGitHub互換リクエストを送るもので、GitHub上のイベント作成・配信は行いません。
+
 ## export する型
 
 | Export | 説明 |
 | --- | --- |
 | `github` | プロバイダー工場関数 |
+| `createGitHubWebhook` | 署名付きWebhook送信クライアントを作成 |
 | `GitHubEvents` | 対応イベント名 → ペイロード型 |
 | `GitHubOptions` | `{ secret: string }` |
+| `GitHubWebhookSender` | 対応Webhookイベント用の型付き送信クライアント |
+| `GitHubWebhookSenderOptions` | 送信シークレットと任意の `fetch` |
 
 ## 補足
 

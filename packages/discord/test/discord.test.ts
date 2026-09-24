@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { discord } from "../src/index.js"
+import { createDiscordWebhook, discord } from "../src/index.js"
 
 const encoder = new TextEncoder()
 const hex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("")
@@ -25,6 +25,52 @@ async function request(payload: unknown, privateKey: CryptoKey, timestamp = Stri
 }
 
 describe("Discord provider", () => {
+  it("sends JSON messages to an incoming webhook and parses the created message", async () => {
+    let requestUrl: URL | undefined
+    let requestBody = ""
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default&with_components=false", {
+      fetch: async (input, init) => {
+        requestUrl = new URL(input.toString())
+        requestBody = String(init?.body)
+        return Response.json({ id: "456", channel_id: "789", content: "sent" })
+      },
+    })
+
+    const message = await webhook.send({ content: "hello", embeds: [{ title: "Deploy" }], components: [{ type: 1 }] }, { threadId: "thread" })
+    expect(requestUrl?.searchParams.get("wait")).toBe("true")
+    expect(requestUrl?.searchParams.get("thread_id")).toBe("thread")
+    expect(requestUrl?.searchParams.get("with_components")).toBe("true")
+    expect(JSON.parse(requestBody)).toEqual({ content: "hello", embeds: [{ title: "Deploy" }], components: [{ type: 1 }] })
+    expect(message).toEqual({ id: "456", channel_id: "789", content: "sent" })
+  })
+
+  it("uses 204 for wait=false, preserves URL thread IDs, and omits with_components without components", async () => {
+    let requestUrl: URL | undefined
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default&with_components=true", {
+      fetch: async input => {
+        requestUrl = new URL(input.toString())
+        return new Response(null, { status: 204 })
+      },
+    })
+
+    expect(await webhook.send({ content: "hello" }, { wait: false })).toBeUndefined()
+    expect(requestUrl?.searchParams.get("wait")).toBe("false")
+    expect(requestUrl?.searchParams.get("thread_id")).toBe("default")
+    expect(requestUrl?.searchParams.has("with_components")).toBe(false)
+  })
+
+  it("reports Discord webhook error messages and handles non-JSON errors", async () => {
+    const jsonError = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => Response.json({ message: "Unknown Webhook" }, { status: 404 }),
+    })
+    await expect(jsonError.send({ content: "hello" })).rejects.toThrow("Discord webhook request failed (404): Unknown Webhook")
+
+    const textError = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => new Response("unavailable", { status: 502 }),
+    })
+    await expect(textError.send({ content: "hello" })).rejects.toThrow("Discord webhook request failed (502)")
+  })
+
   it("verifies and routes interaction types", async () => {
     const keys = await keyPair()
     const app = new Hibiki().use(discord({ publicKey: keys.publicKey }))

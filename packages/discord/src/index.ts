@@ -27,6 +27,97 @@ export interface DiscordOptions {
   tolerance?: number
 }
 
+/** A JSON message payload accepted by Discord's Execute Webhook endpoint. */
+export interface DiscordWebhookPayload {
+  content?: string
+  username?: string
+  avatar_url?: string
+  tts?: boolean
+  embeds?: DiscordEmbed[]
+  allowed_mentions?: Record<string, unknown>
+  components?: Record<string, unknown>[]
+  attachments?: Record<string, unknown>[]
+  flags?: number
+  thread_name?: string
+  applied_tags?: string[]
+  poll?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+/** A permissive representation of the message returned by Discord. */
+export interface DiscordWebhookMessage {
+  id: string
+  channel_id: string
+  content?: string
+  [key: string]: unknown
+}
+
+/** A Discord rich embed. Additional Discord embed properties are accepted. */
+export interface DiscordEmbed {
+  title?: string
+  description?: string
+  url?: string
+  color?: number
+  timestamp?: string
+  footer?: Record<string, unknown>
+  image?: Record<string, unknown>
+  thumbnail?: Record<string, unknown>
+  author?: Record<string, unknown>
+  fields?: Record<string, unknown>[]
+  [key: string]: unknown
+}
+
+export interface DiscordWebhookSendOptions {
+  /** Send the message to an existing thread in the webhook's channel. */
+  threadId?: string
+  /** Wait for Discord to confirm delivery and return the created message. Defaults to true. */
+  wait?: boolean
+}
+
+export interface DiscordWebhookOptions {
+  /** Override global fetch, for example when running in a custom runtime. */
+  fetch?: typeof fetch
+}
+
+/** A small client for sending JSON messages to an incoming Discord webhook. */
+export interface DiscordWebhook {
+  send(payload: DiscordWebhookPayload, options?: DiscordWebhookSendOptions): Promise<DiscordWebhookMessage | undefined>
+}
+
+/** Create a client for sending JSON messages to an incoming Discord webhook URL. */
+export function createDiscordWebhook(url: string, options: DiscordWebhookOptions = {}): DiscordWebhook {
+  const endpoint = new URL(url)
+  const fetcher = options.fetch ?? fetch
+
+  return {
+    async send(payload, sendOptions = {}) {
+      const requestUrl = new URL(endpoint)
+      requestUrl.searchParams.set("wait", String(sendOptions.wait ?? true))
+      if (sendOptions.threadId) requestUrl.searchParams.set("thread_id", sendOptions.threadId)
+      if (payload.components) requestUrl.searchParams.set("with_components", "true")
+      else requestUrl.searchParams.delete("with_components")
+
+      const response = await fetcher(requestUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        let detail = ""
+        try {
+          const error: unknown = await response.json()
+          if (error && typeof error === "object" && "message" in error && typeof error.message === "string") detail = `: ${error.message}`
+        } catch { /* The response may not contain JSON. */ }
+        throw new Error(`Discord webhook request failed (${response.status})${detail}`)
+      }
+
+      if (response.status === 204) return undefined
+      return await response.json() as DiscordWebhookMessage
+    },
+  }
+}
+
 const encoder = new TextEncoder()
 
 /** Decode a hexadecimal string, returning undefined for malformed input. */

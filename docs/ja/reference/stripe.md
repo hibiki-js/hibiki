@@ -63,6 +63,26 @@ Body は Stripe イベント封筒の JSON である必要があります。対�
 
 `event.id` がある場合は `HibikiContext.id` にコピーします。
 
+## 署名付きイベントの送信
+
+`createStripeWebhook(url, { secret })` は、Stripe互換の署名を付けたJSONを任意のWebhook URLへ送信します。受信側に設定したものと同じ署名シークレットを指定してください。
+
+```ts
+import { createStripeWebhook } from "@hibiki-js/stripe"
+
+const sender = createStripeWebhook(process.env.WEBHOOK_URL!, {
+  secret: process.env.WEBHOOK_SECRET!,
+})
+const response = await sender.send({
+  id: "evt_example",
+  type: "invoice.paid",
+  data: { object: { id: "in_example", object: "invoice" } },
+})
+if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`)
+```
+
+`send` はJSON本文そのものにStripe形式の `t=…,v1=…` HMAC-SHA256署名を付け、受信側の `Response` を返します。署名時刻は現在のUnix時刻が使われます。`{ timestamp }` で上書きできます。この機能は任意URLにStripe互換リクエストを送るもので、Stripe上のイベント作成・配信は行いません。
+
 ## イベントの形
 
 対応する Stripe ハンドラが受け取るのは内側のオブジェクト単体ではなく、Stripe の封筒です。
@@ -83,8 +103,12 @@ Body は Stripe イベント封筒の JSON である必要があります。対�
 | Export | 説明 |
 | --- | --- |
 | `stripe` | プロバイダー工場関数 |
+| `createStripeWebhook` | 署名付きWebhook送信クライアントを作成 |
 | `StripeEvents` | 対応イベント名 → ペイロード型 |
 | `StripeOptions` | `{ secret; tolerance? }` |
+| `StripeWebhookEvent` | 対応するStripeイベントpayloadのユニオン |
+| `StripeWebhookSenderOptions` | 送信シークレットと任意の `fetch` |
+| `StripeWebhookSendOptions` | 任意の署名時刻 |
 | `StripeCheckoutSession` | Checkout Session の `data.object` |
 | `StripePaymentIntent` | PaymentIntent |
 | `StripeInvoice` | Invoice |

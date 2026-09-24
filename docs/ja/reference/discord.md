@@ -27,6 +27,32 @@ Discord のエンドポイント検証には、`discord.ping` から `{ type: 1 
 
 プロバイダーは許容時間内で重複するInteraction IDをメモリ上で抑止します。複数インスタンスにまたがる環境では、アプリケーション側でも永続的な冪等性制御を行ってください。
 
+## メッセージの送信
+
+`createDiscordWebhook(url)` を使うと、Discord の受信Webhookへ JSON メッセージを送れます。URL には Discord のチャンネル連携設定で発行したものを指定します。
+
+```ts
+import { createDiscordWebhook } from "@hibiki-js/discord"
+
+const webhook = createDiscordWebhook(process.env.DISCORD_WEBHOOK_URL!)
+const message = await webhook.send({
+  content: "デプロイが完了しました。",
+  embeds: [{ title: "Production", color: 0x5865f2 }],
+  allowed_mentions: { parse: [] },
+})
+```
+
+`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。`components` を含む場合は、Discord が処理できるよう `with_components=true` を設定します。HTTP エラー時は、取得できれば Discord のエラーメッセージを含む例外を投げます。JSON 形式の送信に対応し、ファイルアップロードには対応していません。
+
+| Export | 説明 |
+| --- | --- |
+| `createDiscordWebhook` | 受信Webhook用の送信クライアントを作成 |
+| `DiscordWebhookPayload` | JSON メッセージの型 |
+| `DiscordEmbed` | リッチEmbedの型 |
+| `DiscordWebhookMessage` | Discord が返すメッセージの型 |
+| `DiscordWebhookSendOptions` | 送信ごとの `threadId` / `wait` オプション |
+| `DiscordWebhookOptions` | クライアントのオプション |
+
 ## イベント名
 
 | Discord Interaction type | Hibiki イベント名 |
