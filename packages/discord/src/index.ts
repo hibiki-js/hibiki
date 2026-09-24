@@ -94,6 +94,8 @@ export function createDiscordWebhook(url: string, options: DiscordWebhookOptions
       const requestUrl = new URL(endpoint)
       requestUrl.searchParams.set("wait", String(sendOptions.wait ?? true))
       if (sendOptions.threadId) requestUrl.searchParams.set("thread_id", sendOptions.threadId)
+      if (payload.components) requestUrl.searchParams.set("with_components", "true")
+      else requestUrl.searchParams.delete("with_components")
 
       const response = await fetcher(requestUrl, {
         method: "POST",

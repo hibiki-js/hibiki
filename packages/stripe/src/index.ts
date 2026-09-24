@@ -90,6 +90,7 @@ export function createStripeWebhook(url: string, options: StripeWebhookSenderOpt
 
       return fetcher(endpoint, {
         method: "POST",
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           "stripe-signature": `t=${timestampText},v1=${signature}`,

@@ -23,6 +23,21 @@ describe("GitHub provider", () => {
     expect(seen).toBe(42)
   })
 
+  it("rejects HTTP and network failures from the webhook receiver", async () => {
+    const payload = { zen: "Keep it logically awesome." }
+    const httpFailure = createGitHubWebhook("https://hibiki.test/webhook", {
+      secret: "secret",
+      fetch: async () => new Response("unavailable", { status: 503 }),
+    })
+    await expect(httpFailure.send("ping", payload)).rejects.toThrow("GitHub webhook request failed (503)")
+
+    const networkFailure = createGitHubWebhook("https://hibiki.test/webhook", {
+      secret: "secret",
+      fetch: async () => { throw new TypeError("connection refused") },
+    })
+    await expect(networkFailure.send("ping", payload)).rejects.toThrow("GitHub webhook request failed")
+  })
+
   it("routes action-level events", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     let number = 0

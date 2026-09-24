@@ -95,7 +95,7 @@ const response = await sender.send("pull_request.opened", {
 if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`)
 ```
 
-`send` signs the exact JSON body with HMAC-SHA256, sets `X-GitHub-Event` and `X-Hub-Signature-256`, and returns the receiver's `Response`. This sends GitHub-compatible requests to your URL; it does not create or deliver events through GitHub itself.
+`send` signs the exact JSON body with HMAC-SHA256, sets `X-GitHub-Event` and `X-Hub-Signature-256`, and returns the receiver's successful `Response`. HTTP errors and network failures throw. This sends GitHub-compatible requests to your URL; it does not create or deliver events through GitHub itself.
 
 ## Exported types
 

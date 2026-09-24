@@ -95,7 +95,7 @@ const response = await sender.send("pull_request.opened", {
 if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`)
 ```
 
-`send` はJSON本文のHMAC-SHA256署名を作成し、`X-GitHub-Event` と `X-Hub-Signature-256` を設定して、受信側の `Response` を返します。この機能は任意URLへGitHub互換リクエストを送るもので、GitHub上のイベント作成・配信は行いません。
+`send` はJSON本文のHMAC-SHA256署名を作成し、`X-GitHub-Event` と `X-Hub-Signature-256` を設定して、成功時に受信側の `Response` を返します。HTTPエラーとネットワークエラーは例外になります。この機能は任意URLへGitHub互換リクエストを送るもので、GitHub上のイベント作成・配信は行いません。
 
 ## export する型
 

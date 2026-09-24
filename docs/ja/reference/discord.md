@@ -42,7 +42,7 @@ const message = await webhook.send({
 })
 ```
 
-`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。HTTP エラー時は、取得できれば Discord のエラーメッセージを含む例外を投げます。JSON 形式の送信に対応し、ファイルアップロードには対応していません。
+`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。`components` を含む場合は、Discord が処理できるよう `with_components=true` を設定します。HTTP エラー時は、取得できれば Discord のエラーメッセージを含む例外を投げます。JSON 形式の送信に対応し、ファイルアップロードには対応していません。
 
 | Export | 説明 |
 | --- | --- |

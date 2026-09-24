@@ -42,7 +42,7 @@ const message = await webhook.send({
 })
 ```
 
-`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). Failed HTTP responses throw an error with Discord's message when available. This client sends JSON payloads; file uploads are not included.
+`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). If `components` are present, the client sets `with_components=true` so Discord processes them. Failed HTTP responses throw an error with Discord's message when available. This client sends JSON payloads; file uploads are not included.
 
 | Export | Description |
 | --- | --- |

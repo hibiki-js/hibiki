@@ -8,10 +8,14 @@ describe("Stripe provider", () => {
     const secret = "whsec_sender"
     const app = new Hibiki().use(stripe({ secret }))
     let seen = ""
+    let redirect: RequestRedirect | undefined
     app.on("stripe.invoice.paid", ({ event }) => { seen = event.data.object.id })
     const sender = createStripeWebhook("https://hibiki.test/webhook", {
       secret,
-      fetch: async (input, init) => app.handle(new Request(input, init), { provider: "stripe" }),
+      fetch: async (input, init) => {
+        redirect = init?.redirect
+        return app.handle(new Request(input, init), { provider: "stripe" })
+      },
     })
     const response = await sender.send({
       id: "evt_sender",
@@ -21,6 +25,7 @@ describe("Stripe provider", () => {
 
     expect(response.status).toBe(204)
     expect(seen).toBe("in_sender")
+    expect(redirect).toBe("error")
   })
 
   it("rejects invalid outbound Stripe signing timestamps", async () => {

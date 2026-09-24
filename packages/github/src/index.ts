@@ -64,15 +64,22 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
       const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(body) as BufferSource)), byte => byte.toString(16).padStart(2, "0")).join("")
       const nativeEventName = String(eventName).split(".", 1)[0]!
 
-      return fetcher(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-github-event": nativeEventName,
-          "x-hub-signature-256": `sha256=${signature}`,
-        },
-        body,
-      })
+      let response: Response
+      try {
+        response = await fetcher(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-github-event": nativeEventName,
+            "x-hub-signature-256": `sha256=${signature}`,
+          },
+          body,
+        })
+      } catch (error) {
+        throw new Error("GitHub webhook request failed", { cause: error })
+      }
+      if (!response.ok) throw new Error(`GitHub webhook request failed (${response.status})`)
+      return response
     },
   }
 }

@@ -28,7 +28,7 @@ describe("Discord provider", () => {
   it("sends JSON messages to an incoming webhook and parses the created message", async () => {
     let requestUrl: URL | undefined
     let requestBody = ""
-    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default", {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default&with_components=false", {
       fetch: async (input, init) => {
         requestUrl = new URL(input.toString())
         requestBody = String(init?.body)
@@ -36,25 +36,27 @@ describe("Discord provider", () => {
       },
     })
 
-    const message = await webhook.send({ content: "hello", embeds: [{ title: "Deploy" }] }, { threadId: "thread", wait: false })
-    expect(requestUrl?.searchParams.get("wait")).toBe("false")
+    const message = await webhook.send({ content: "hello", embeds: [{ title: "Deploy" }], components: [{ type: 1 }] }, { threadId: "thread" })
+    expect(requestUrl?.searchParams.get("wait")).toBe("true")
     expect(requestUrl?.searchParams.get("thread_id")).toBe("thread")
-    expect(JSON.parse(requestBody)).toEqual({ content: "hello", embeds: [{ title: "Deploy" }] })
+    expect(requestUrl?.searchParams.get("with_components")).toBe("true")
+    expect(JSON.parse(requestBody)).toEqual({ content: "hello", embeds: [{ title: "Deploy" }], components: [{ type: 1 }] })
     expect(message).toEqual({ id: "456", channel_id: "789", content: "sent" })
   })
 
-  it("uses wait=true by default, preserves URL thread IDs, and accepts 204 responses", async () => {
+  it("uses 204 for wait=false, preserves URL thread IDs, and omits with_components without components", async () => {
     let requestUrl: URL | undefined
-    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default", {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default&with_components=true", {
       fetch: async input => {
         requestUrl = new URL(input.toString())
         return new Response(null, { status: 204 })
       },
     })
 
-    expect(await webhook.send({ content: "hello" })).toBeUndefined()
-    expect(requestUrl?.searchParams.get("wait")).toBe("true")
+    expect(await webhook.send({ content: "hello" }, { wait: false })).toBeUndefined()
+    expect(requestUrl?.searchParams.get("wait")).toBe("false")
     expect(requestUrl?.searchParams.get("thread_id")).toBe("default")
+    expect(requestUrl?.searchParams.has("with_components")).toBe(false)
   })
 
   it("reports Discord webhook error messages and handles non-JSON errors", async () => {
