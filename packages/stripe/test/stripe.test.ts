@@ -1,9 +1,37 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { stripe } from "../src/index.js"
+import { createStripeWebhook, stripe } from "../src/index.js"
 import { createWebhookTest, stripeRequest } from "@hibiki-js/testing"
 
 describe("Stripe provider", () => {
+  it("sends a Stripe-signed event that the provider can verify", async () => {
+    const secret = "whsec_sender"
+    const app = new Hibiki().use(stripe({ secret }))
+    let seen = ""
+    app.on("stripe.invoice.paid", ({ event }) => { seen = event.data.object.id })
+    const sender = createStripeWebhook("https://hibiki.test/webhook", {
+      secret,
+      fetch: async (input, init) => app.handle(new Request(input, init), { provider: "stripe" }),
+    })
+    const response = await sender.send({
+      id: "evt_sender",
+      type: "invoice.paid",
+      data: { object: { id: "in_sender", object: "invoice" } },
+    }, { timestamp: Math.floor(Date.now() / 1000) })
+
+    expect(response.status).toBe(204)
+    expect(seen).toBe("in_sender")
+  })
+
+  it("rejects invalid outbound Stripe signing timestamps", async () => {
+    const sender = createStripeWebhook("https://hibiki.test/webhook", { secret: "secret", fetch: async () => new Response() })
+    await expect(sender.send({
+      id: "evt_invalid_timestamp",
+      type: "invoice.paid",
+      data: { object: { id: "in_1", object: "invoice" } },
+    }, { timestamp: -1 })).rejects.toThrow("timestamp")
+  })
+
   it("accepts a signed supported event", async () => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
     let seen = ""

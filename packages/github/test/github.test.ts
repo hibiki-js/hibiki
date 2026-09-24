@@ -1,9 +1,28 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { github } from "../src/index.js"
+import { createGitHubWebhook, github } from "../src/index.js"
 import { createWebhookTest, githubRequest } from "@hibiki-js/testing"
 
 describe("GitHub provider", () => {
+  it("sends a GitHub-signed action event that the provider can verify", async () => {
+    const secret = "github_sender_secret"
+    const app = new Hibiki().use(github({ secret }))
+    let seen = 0
+    app.on("github.pull_request.opened", ({ event }) => { seen = event.pull_request.number })
+    const sender = createGitHubWebhook("https://hibiki.test/webhook", {
+      secret,
+      fetch: async (input, init) => app.handle(new Request(input, init), { provider: "github" }),
+    })
+    const response = await sender.send("pull_request.opened", {
+      action: "opened",
+      pull_request: { number: 42 },
+      repository: { full_name: "hibiki/repo" },
+    })
+
+    expect(response.status).toBe(204)
+    expect(seen).toBe(42)
+  })
+
   it("routes action-level events", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     let number = 0
