@@ -66,7 +66,7 @@ export default defineConfig({
   description: "Type-safe webhooks for TypeScript",
   // Published at https://hibiki-js.github.io (org root site)
   base: "/",
-  // GitHub Pages does not resolve extensionless paths to the generated .html files.
+  // Keep .html in generated links for direct static-file URLs.
   cleanUrls: false,
   lastUpdated: true,
   sitemap: {
