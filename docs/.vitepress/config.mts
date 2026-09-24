@@ -66,7 +66,8 @@ export default defineConfig({
   description: "Type-safe webhooks for TypeScript",
   // Published at https://hibiki-js.github.io (org root site)
   base: "/",
-  cleanUrls: true,
+  // Keep .html in generated links for direct static-file URLs.
+  cleanUrls: false,
   lastUpdated: true,
   sitemap: {
     hostname: "https://hibiki-js.github.io",
