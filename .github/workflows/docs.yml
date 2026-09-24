@@ -23,10 +23,12 @@ jobs:
           GH_TOKEN: ${{ secrets.DOCS_DEPLOY_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "DOCS_DEPLOY_TOKEN is not set."
-            echo "Create a classic PAT (workflow scope) or fine-grained token with Actions:write on hibiki-js/hibiki-js.github.io,"
-            echo "then add it as the DOCS_DEPLOY_TOKEN secret on hibiki-js/hibiki."
-            echo "Until then, run 'Deploy docs' manually on hibiki-js/hibiki-js.github.io."
+            echo "::warning title=Docs deploy not triggered::DOCS_DEPLOY_TOKEN is missing; the Pages repository's scheduled deploy will publish the latest main branch."
+            {
+              echo "### Docs deploy was not triggered immediately"
+              echo "DOCS_DEPLOY_TOKEN is not set. The Pages repository's scheduled deployment will publish the latest main branch."
+              echo "To restore immediate deploys, configure a fine-grained token with Actions:write on hibiki-js/hibiki-js.github.io as this repository's DOCS_DEPLOY_TOKEN secret."
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           gh workflow run deploy.yml \
