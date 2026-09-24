@@ -63,6 +63,26 @@ The body must be JSON with a Stripe event envelope. Supported `type` values are 
 
 When present, Stripe's `event.id` is copied onto `HibikiContext.id`.
 
+## Sending signed events
+
+`createStripeWebhook(url, { secret })` sends Stripe-compatible signed JSON to any webhook URL. Use the same signing secret configured by the receiver.
+
+```ts
+import { createStripeWebhook } from "@hibiki-js/stripe"
+
+const sender = createStripeWebhook(process.env.WEBHOOK_URL!, {
+  secret: process.env.WEBHOOK_SECRET!,
+})
+const response = await sender.send({
+  id: "evt_example",
+  type: "invoice.paid",
+  data: { object: { id: "in_example", object: "invoice" } },
+})
+if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`)
+```
+
+`send` signs the exact JSON body using Stripe's `t=…,v1=…` HMAC-SHA256 format and returns the receiver's `Response`. The timestamp defaults to the current Unix time; pass `{ timestamp }` to override it. This sends Stripe-compatible requests to your URL; it does not create or deliver events through Stripe itself.
+
 ## Event payload shape
 
 Every supported Stripe handler receives Stripe's envelope, not the inner object alone:
@@ -83,8 +103,12 @@ Object helpers exported by this package (`StripeInvoice`, `StripeCharge`, …) d
 | Export | Description |
 | --- | --- |
 | `stripe` | Provider factory |
+| `createStripeWebhook` | Create a signed webhook sender |
 | `StripeEvents` | Map of supported event name → payload type |
 | `StripeOptions` | `{ secret; tolerance? }` |
+| `StripeWebhookEvent` | Union of supported Stripe event payloads |
+| `StripeWebhookSenderOptions` | Sender secret and optional custom `fetch` |
+| `StripeWebhookSendOptions` | Optional signing timestamp |
 | `StripeCheckoutSession` | `data.object` for Checkout Session events |
 | `StripePaymentIntent` | PaymentIntent object |
 | `StripeInvoice` | Invoice object |

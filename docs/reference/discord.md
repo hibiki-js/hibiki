@@ -27,6 +27,32 @@ Returns `HibikiProvider<"discord", DiscordEvents>`.
 
 The provider also suppresses duplicate interaction IDs in memory for the tolerance window. For multi-instance deployments, use durable application-level idempotency as well.
 
+## Sending messages
+
+Use `createDiscordWebhook(url)` to post JSON messages to an incoming Discord webhook. The URL is the one generated in Discord's channel integration settings.
+
+```ts
+import { createDiscordWebhook } from "@hibiki-js/discord"
+
+const webhook = createDiscordWebhook(process.env.DISCORD_WEBHOOK_URL!)
+const message = await webhook.send({
+  content: "A deployment finished.",
+  embeds: [{ title: "Production", color: 0x5865f2 }],
+  allowed_mentions: { parse: [] },
+})
+```
+
+`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). Failed HTTP responses throw an error with Discord's message when available. This client sends JSON payloads; file uploads are not included.
+
+| Export | Description |
+| --- | --- |
+| `createDiscordWebhook` | Create an incoming webhook sender |
+| `DiscordWebhookPayload` | JSON message payload |
+| `DiscordEmbed` | Rich embed payload |
+| `DiscordWebhookMessage` | Message returned by Discord |
+| `DiscordWebhookSendOptions` | Per-send `threadId` and `wait` options |
+| `DiscordWebhookOptions` | Sender options |
+
 ## Event names
 
 | Discord interaction type | Hibiki event name |

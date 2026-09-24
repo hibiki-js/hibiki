@@ -58,6 +58,48 @@ export interface StripeEvents {
 
 export interface StripeOptions { secret: string; tolerance?: number }
 
+export type StripeWebhookEvent = StripeEvents[keyof StripeEvents]
+
+export interface StripeWebhookSenderOptions {
+  /** Signing secret shared with the webhook receiver. */
+  secret: string
+  /** Override global fetch, for example when running in a custom runtime. */
+  fetch?: typeof fetch
+}
+
+export interface StripeWebhookSendOptions {
+  /** Unix timestamp in seconds. Defaults to the current time. */
+  timestamp?: number
+}
+
+/** Create a client that sends Stripe-compatible, signed webhook events to a URL. */
+export function createStripeWebhook(url: string, options: StripeWebhookSenderOptions) {
+  const endpoint = new URL(url)
+  const fetcher = options.fetch ?? fetch
+  const keyPromise = crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+
+  return {
+    async send(event: StripeWebhookEvent, sendOptions: StripeWebhookSendOptions = {}): Promise<Response> {
+      const timestamp = sendOptions.timestamp ?? Math.floor(Date.now() / 1000)
+      if (!Number.isInteger(timestamp) || timestamp < 0) throw new TypeError("Stripe webhook timestamp must be a non-negative integer")
+      const timestampText = String(timestamp)
+      const body = JSON.stringify(event)
+      const signedPayload = encoder.encode(`${timestampText}.${body}`)
+      const key = await keyPromise
+      const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, signedPayload as BufferSource)), byte => byte.toString(16).padStart(2, "0")).join("")
+
+      return fetcher(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "stripe-signature": `t=${timestampText},v1=${signature}`,
+        },
+        body,
+      })
+    },
+  }
+}
+
 const SUPPORTED_EVENTS = {
   "checkout.session.completed": true,
   "checkout.session.expired": true,
