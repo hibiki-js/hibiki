@@ -85,7 +85,7 @@ Rules:
 
 | Provider | Behavior |
 | --- | --- |
-| Stripe | If `payload` is not already a full event envelope (`type` present), wrap as `{ id: "evt_test", type: <native>, data: { object: payload } }` |
+| Stripe | If `payload` is not already a full event envelope (`type` present), wrap as `{ id: "evt_<random UUID>", type: <native>, data: { object: payload } }` |
 | GitHub | Split `provider.event` / `provider.event.action`. For action events, inject `action` when the payload omits it. Set `X-GitHub-Event` to the GitHub event name |
 | Other | Throws — only Stripe and GitHub helpers are built in |
 

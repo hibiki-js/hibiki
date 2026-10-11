@@ -25,7 +25,7 @@ Returns `HibikiProvider<"discord", DiscordEvents>`.
 
 `discord.ping` must return `{ type: 1 }` for Discord's endpoint validation. Command and component handlers should return the appropriate [Interaction Response](https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-response-object) JSON, for example `{ type: 4, data: { content: "Hello" } }`.
 
-The provider also suppresses duplicate interaction IDs in memory for the tolerance window. For multi-instance deployments, use durable application-level idempotency as well.
+Hibiki Core suppresses duplicate authenticated interaction IDs after successful handler execution. The default memory store retains completed IDs for 24 hours; use shared durable storage across instances.
 
 ## Sending messages
 
@@ -97,3 +97,5 @@ To add descriptions, supply `attachments` in the message payload with an `id` ma
 | `DiscordInteraction` | Typed Discord interaction payload |
 | `DiscordInteractionType` | Supported numeric interaction type |
 | `DiscordOptions` | `{ publicKey: string }` |
+
+For body limits, authenticated event IDs, shared deduplication, and retry behavior, see [Secure webhook handling](../guides/security).

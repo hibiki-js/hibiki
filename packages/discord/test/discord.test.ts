@@ -32,6 +32,7 @@ describe("Discord provider", () => {
       fetch: async (input, init) => {
         requestUrl = new URL(input.toString())
         requestBody = String(init?.body)
+        expect(init?.redirect).toBe("error")
         return Response.json({ id: "456", channel_id: "789", content: "sent" })
       },
     })
@@ -176,13 +177,14 @@ describe("Discord provider", () => {
   it("rejects expired and replayed interactions", async () => {
     const keys = await keyPair()
     const app = new Hibiki().use(discord({ publicKey: keys.publicKey, tolerance: 60 }))
+    app.on("discord.application_command", () => {})
     const payload = { id: "1", application_id: "app", type: 2 }
     const stale = await request(payload, keys.privateKey, String(Math.floor(Date.now() / 1000) - 61))
     expect((await app.handle(stale, { provider: "discord" })).status).toBe(401)
     const first = await request(payload, keys.privateKey)
     expect((await app.handle(first, { provider: "discord" })).status).toBe(204)
     const replay = await request(payload, keys.privateKey)
-    expect((await app.handle(replay, { provider: "discord" })).status).toBe(200)
+    expect((await app.handle(replay, { provider: "discord" })).status).toBe(204)
   })
 
   it("rejects non-JSON content after signature verification and ignores unknown types", async () => {
@@ -197,5 +199,26 @@ describe("Discord provider", () => {
   it("validates the configured public key", () => {
     expect(() => discord({ publicKey: "not-a-key" })).toThrow("publicKey")
     expect(() => discord({ publicKey: "00".repeat(32), tolerance: -1 })).toThrow("tolerance")
+  })
+})
+
+
+describe("Discord retry protection", () => {
+  it("allows a signed interaction to retry after a handler failure", async () => {
+    const keys = await keyPair()
+    const app = new Hibiki().use(discord({ publicKey: keys.publicKey }))
+    let calls = 0
+    app.on("discord.application_command", () => { if (++calls === 1) throw new Error("temporary failure") })
+    const payload = { id: "retry", application_id: "app", type: 2 }
+    expect((await app.handle(await request(payload, keys.privateKey), { provider: "discord" })).status).toBe(500)
+    expect((await app.handle(await request(payload, keys.privateKey), { provider: "discord" })).status).toBe(204)
+    expect((await app.handle(await request(payload, keys.privateKey), { provider: "discord" })).status).toBe(204)
+    expect(calls).toBe(2)
+  })
+
+  it("rejects supported interactions without authenticated IDs", async () => {
+    const keys = await keyPair()
+    const app = new Hibiki().use(discord({ publicKey: keys.publicKey }))
+    expect((await app.handle(await request({ type: 2 }, keys.privateKey), { provider: "discord" })).status).toBe(400)
   })
 })

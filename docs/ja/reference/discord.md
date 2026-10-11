@@ -25,7 +25,7 @@ const provider = discord({
 
 Discord のエンドポイント検証には、`discord.ping` から `{ type: 1 }` を返す必要があります。コマンドやコンポーネントのハンドラでは、たとえば `{ type: 4, data: { content: "Hello" } }` のような [Interaction Response](https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-response-object) JSON を返してください。
 
-プロバイダーは許容時間内で重複するInteraction IDをメモリ上で抑止します。複数インスタンスにまたがる環境では、アプリケーション側でも永続的な冪等性制御を行ってください。
+Hibiki Coreは処理に成功したInteraction IDをデフォルトで24時間保持し、重複処理を抑止します。複数インスタンスでは永続化した共有のID保存先を使ってください。
 
 ## メッセージの送信
 
@@ -97,3 +97,5 @@ await webhook.send({
 | `DiscordInteraction` | 型付けされた Discord Interaction payload |
 | `DiscordInteractionType` | 対応する数値の Interaction type |
 | `DiscordOptions` | `{ publicKey: string }` |
+
+本文サイズ制限、署名で確認したイベントID、共有保存先での重複防止、再試行時の動作は[Webhookを安全に処理する](../guides/security)を参照してください。

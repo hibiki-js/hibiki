@@ -45,6 +45,10 @@ const app = new Hibiki(options?)
 | オプション | 型 | デフォルト | 説明 |
 | --- | --- | --- | --- |
 | `strictEvents` | `boolean` | `false` | `true` のとき、未対応イベントを `200` ではなく `400`（`HIBIKI_UNSUPPORTED_EVENT`）で返す |
+| `maxBodyBytes` | `number` | `1048576` | 署名検証前に読み込む本文の上限バイト数。正の安全な整数を指定 |
+| `idempotencyStore` | `IdempotencyStore` | 件数制限付きのメモリ保存先 | 重複判定用IDを確保する保存先。複数インスタンスでは永続化した共有保存先を指定 |
+
+保存先の仕様、再送防止の限界、再試行時の動作は[Webhookを安全に処理する](../guides/security)を参照してください。
 
 ### `use(provider)`
 
@@ -234,3 +238,11 @@ HTTP 応答の body は **`error.code` だけ**です。呼び出し側に見え
 - [エラー処理](/ja/guide/error-handling) — 応答一覧と `strictEvents`
 - [Stripe](/ja/reference/stripe) / [GitHub](/ja/reference/github) — プロバイダー
 - [Testing](/ja/reference/testing) — 署名付きリクエストのヘルパー
+
+### セキュリティ関連のエラーコード
+
+| コード | ステータス |
+| --- | --- |
+| `HIBIKI_PAYLOAD_TOO_LARGE` | `413` |
+| `HIBIKI_EVENT_IN_PROGRESS` | `503` |
+| `HIBIKI_IDEMPOTENCY_UNAVAILABLE` | `503` |

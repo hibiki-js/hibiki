@@ -132,3 +132,5 @@ if (!response.ok) throw new Error(`Webhook receiver returned ${response.status}`
 - [Stripe プロバイダーガイド](/ja/providers/stripe) — 対応イベント一覧
 - [Next.js + Stripe](/ja/guides/nextjs-stripe) / [Hono + Stripe](/ja/guides/hono-stripe)
 - [Core リファレンス](/ja/reference/core) — `handle`・応答・エラー
+
+本文サイズ制限、署名で確認したイベントID、共有保存先での重複防止、再試行時の動作は[Webhookを安全に処理する](../guides/security)を参照してください。

@@ -76,6 +76,7 @@ export interface StripeWebhookSendOptions {
 export function createStripeWebhook(url: string, options: StripeWebhookSenderOptions) {
   const endpoint = new URL(url)
   const fetcher = options.fetch ?? fetch
+  if (typeof options.secret !== "string" || !options.secret.trim()) throw new TypeError("Webhook secret must be a non-empty string")
   const keyPromise = crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
 
   return {
@@ -145,12 +146,10 @@ function isSupportedEvent(type: string): type is keyof StripeEvents {
 const encoder = new TextEncoder()
 
 function fromHex(value: string): Uint8Array | undefined {
-  if (value.length % 2 !== 0) return undefined
+  if (!/^[0-9a-f]{64}$/i.test(value)) return undefined
   const bytes = new Uint8Array(value.length / 2)
   for (let i = 0; i < bytes.length; i++) {
-    const nibble = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16)
-    if (Number.isNaN(nibble)) return undefined
-    bytes[i] = nibble
+    bytes[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16)
   }
   return bytes
 }
@@ -158,6 +157,8 @@ function fromHex(value: string): Uint8Array | undefined {
 /** Create a Stripe provider without requiring the Stripe SDK. */
 export function stripe(options: StripeOptions): HibikiProvider<"stripe", StripeEvents> {
   const tolerance = options.tolerance ?? 300
+  if (!Number.isFinite(tolerance) || tolerance < 0) throw new TypeError("Stripe tolerance must be a non-negative finite number")
+  if (typeof options.secret !== "string" || !options.secret.trim()) throw new TypeError("Webhook secret must be a non-empty string")
   const keyPromise = crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"])
   return defineProvider<"stripe", StripeEvents>({
     name: "stripe",
@@ -198,6 +199,7 @@ export function stripe(options: StripeOptions): HibikiProvider<"stripe", StripeE
       const event = payload as { id?: unknown; type?: unknown }
       const id = typeof event.id === "string" ? event.id : undefined
       if (typeof event.type === "string" && isSupportedEvent(event.type)) {
+        if (!id) throw new Error("Missing Stripe event ID")
         return {
           kind: "supported",
           eventName: event.type,

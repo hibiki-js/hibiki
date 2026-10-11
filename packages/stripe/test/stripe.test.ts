@@ -185,18 +185,58 @@ describe("Stripe provider", () => {
     ])
   })
 
-  it("rejects non-object Stripe JSON and accepts events without ids", async () => {
+  it("rejects non-object Stripe JSON and supported events without ids", async () => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
     const invalid = await stripeRequest(null, "secret")
     expect(await (await app.handle(invalid, { provider: "stripe" })).text()).toBe("HIBIKI_PARSE_FAILED")
 
-    app.on("stripe.customer.updated", ({ event }) => {
-      expect(event.id).toBeUndefined()
-    })
+    let calls = 0
+    app.on("stripe.customer.updated", () => { calls++ })
     const noId = await stripeRequest({ type: "customer.updated", data: { object: { id: "cus_1", object: "customer" } } }, "secret")
-    expect((await app.handle(noId, { provider: "stripe" })).status).toBe(204)
+    expect((await app.handle(noId, { provider: "stripe" })).status).toBe(400)
+    expect(calls).toBe(0)
 
     const noType = await stripeRequest({ id: "evt_x", data: { object: { id: "cus_1" } } }, "secret")
     expect((await app.handle(noType, { provider: "stripe" })).status).toBe(200)
+  })
+})
+
+describe("Stripe security", () => {
+  it.each([NaN, Infinity, -1])("rejects invalid tolerance: %s", tolerance => {
+    expect(() => stripe({ secret: "secret", tolerance })).toThrow(TypeError)
+  })
+
+  it("suppresses duplicate signed event IDs", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    let calls = 0
+    app.on("stripe.invoice.paid", () => { calls++ })
+    const payload = { id: "evt_duplicate", type: "invoice.paid", data: { object: { id: "in_1", object: "invoice" } } }
+    for (let i = 0; i < 2; i++) {
+      const req = await stripeRequest(payload, "secret")
+      expect((await app.handle(req, { provider: "stripe" })).status).toBe(204)
+    }
+    expect(calls).toBe(1)
+  })
+
+  it.each(["", "   "])("rejects missing secrets", secret => {
+    expect(() => stripe({ secret })).toThrow(TypeError)
+    expect(() => createStripeWebhook("https://test", { secret })).toThrow(TypeError)
+  })
+})
+
+
+describe("Strict signature encoding", () => {
+  it("rejects non-hex pairs that parseInt would accept as valid signature bytes", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret", tolerance: Number.MAX_SAFE_INTEGER }))
+    const req = await stripeRequest({ id: "evt_hex", type: "invoice.paid", data: { object: {} } }, "secret", 1_700_000_000)
+    const header = req.headers.get("stripe-signature")!
+    const prefix = header.slice(0, header.indexOf("v1=") + 3)
+    const value = header.slice(prefix.length)
+    const pairs = value.match(/.{2}/g)!
+    const index = pairs.findIndex(pair => pair.startsWith("0"))
+    expect(index).toBeGreaterThanOrEqual(0)
+    pairs[index] = `${pairs[index]![1]}x`
+    req.headers.set("stripe-signature", prefix + pairs.join(""))
+    expect((await app.handle(req, { provider: "stripe" })).status).toBe(400)
   })
 })
