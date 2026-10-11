@@ -45,6 +45,10 @@ const app = new Hibiki(options?)
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `strictEvents` | `boolean` | `false` | When `true`, unsupported provider events return `400` with `HIBIKI_UNSUPPORTED_EVENT` instead of `200` |
+| `maxBodyBytes` | `number` | `1048576` | Maximum raw request bytes before verification; positive safe integer |
+| `idempotencyStore` | `IdempotencyStore` | Bounded memory store | Atomic authenticated-ID claims; provide shared durable storage across instances |
+
+See [Secure webhook handling](../guides/security) for store contracts, replay limits, and retry behavior.
 
 ### `use(provider)`
 
@@ -234,3 +238,11 @@ HTTP responses use `error.code` as the **entire** response body. Do not put secr
 - [Error handling](/guide/error-handling) — response matrix and `strictEvents`
 - [Stripe](/reference/stripe) / [GitHub](/reference/github) — provider packages
 - [Testing](/reference/testing) — signed request helpers
+
+### Security error codes
+
+| Code | Status |
+| --- | --- |
+| `HIBIKI_PAYLOAD_TOO_LARGE` | `413` |
+| `HIBIKI_EVENT_IN_PROGRESS` | `503` |
+| `HIBIKI_IDEMPOTENCY_UNAVAILABLE` | `503` |

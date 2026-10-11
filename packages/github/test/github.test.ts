@@ -8,10 +8,11 @@ describe("GitHub provider", () => {
     const secret = "github_sender_secret"
     const app = new Hibiki().use(github({ secret }))
     let seen = 0
+    let redirect: RequestRedirect | undefined
     app.on("github.pull_request.opened", ({ event }) => { seen = event.pull_request.number })
     const sender = createGitHubWebhook("https://hibiki.test/webhook", {
       secret,
-      fetch: async (input, init) => app.handle(new Request(input, init), { provider: "github" }),
+      fetch: async (input, init) => { redirect = init?.redirect; return app.handle(new Request(input, init), { provider: "github" }) },
     })
     const response = await sender.send("pull_request.opened", {
       action: "opened",
@@ -21,6 +22,7 @@ describe("GitHub provider", () => {
 
     expect(response.status).toBe(204)
     expect(seen).toBe(42)
+    expect(redirect).toBe("error")
   })
 
   it("rejects HTTP and network failures from the webhook receiver", async () => {
@@ -184,5 +186,117 @@ describe("GitHub provider", () => {
     })
     expect(opened.status).toBe(204)
     expect(number).toBe(7)
+  })
+})
+
+describe("GitHub security", () => {
+  const push = { ref: "refs/heads/main", repository: { full_name: "hibiki/repo" } }
+
+  it("rejects a push reclassified as a delete by an unsigned header", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.delete", () => { calls++ })
+    const req = await githubRequest(push, "push", "secret")
+    req.headers.set("x-github-event", "delete")
+    expect((await app.handle(req, { provider: "github" })).status).toBe(400)
+    expect(calls).toBe(0)
+  })
+
+  it("binds duplicate IDs to signed bytes rather than unsigned delivery headers", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.push", () => { calls++ })
+    for (const delivery of ["one", "two"]) {
+      const req = await githubRequest(push, "push", "secret")
+      req.headers.set("x-github-delivery", delivery)
+      expect((await app.handle(req, { provider: "github" })).status).toBe(204)
+    }
+    expect(calls).toBe(1)
+  })
+
+  it("blocks replay across compatible event routes", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.create", () => { calls++ })
+    app.on("github.delete", () => { calls++ })
+    const payload = { ...push, ref_type: "branch" }
+    for (const name of ["create", "delete"]) {
+      expect((await app.handle(await githubRequest(payload, name, "secret"), { provider: "github" })).status).toBe(204)
+    }
+    expect(calls).toBe(1)
+  })
+
+  it("rejects events and repositories outside configured allowlists", async () => {
+    const app = new Hibiki().use(github({ secret: "secret", allowedEvents: ["push"], allowedRepositories: ["hibiki/repo"] }))
+    expect((await app.handle(await githubRequest({ ...push, ref_type: "branch" }, "delete", "secret"), { provider: "github" })).status).toBe(400)
+    expect((await app.handle(await githubRequest({ ...push, repository: { full_name: "other/repo" } }, "push", "secret"), { provider: "github" })).status).toBe(400)
+    expect((await app.handle(await githubRequest(push, "push", "secret"), { provider: "github" })).status).toBe(204)
+  })
+
+  it.each([[], { action: "opened", issue: { number: "1" }, repository: { full_name: "hibiki/repo" } }])("rejects malformed typed payloads", async (payload) => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    expect((await app.handle(await githubRequest(payload, "issues", "secret"), { provider: "github" })).status).toBe(400)
+  })
+
+  it.each(["", "   "])("rejects missing secrets", secret => {
+    expect(() => github({ secret })).toThrow(TypeError)
+    expect(() => createGitHubWebhook("https://test", { secret })).toThrow(TypeError)
+  })
+})
+
+
+describe("Strict signature encoding", () => {
+  it("rejects non-hex pairs that parseInt would accept as valid signature bytes", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    const req = await githubRequest({ ref: "refs/heads/main-0", repository: { full_name: "hibiki/repo" } }, "push", "secret")
+    const header = req.headers.get("x-hub-signature-256")!
+    const prefix = "sha256="
+    const value = header.slice(prefix.length)
+    const pairs = value.match(/.{2}/g)!
+    const index = pairs.findIndex(pair => pair.startsWith("0"))
+    expect(index).toBeGreaterThanOrEqual(0)
+    pairs[index] = `${pairs[index]![1]}x`
+    req.headers.set("x-hub-signature-256", prefix + pairs.join(""))
+    expect((await app.handle(req, { provider: "github" })).status).toBe(400)
+  })
+})
+
+
+describe("GitHub request edge cases", () => {
+  it.each([undefined, "sha1=0123"])("rejects a missing or wrong signature scheme: %s", async signature => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.push", () => { calls++ })
+    const req = await githubRequest({ ref: "main", repository: { full_name: "hibiki/repo" } }, "push", "secret")
+    if (signature) req.headers.set("x-hub-signature-256", signature)
+    else req.headers.delete("x-hub-signature-256")
+    const response = await app.handle(req, { provider: "github" })
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
+    expect(calls).toBe(0)
+  })
+
+  it("acknowledges a signed delivery without an event header as unsupported", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.push", () => { calls++ })
+    const req = await githubRequest({ ref: "main", repository: { full_name: "hibiki/repo" } }, "push", "secret")
+    req.headers.delete("x-github-event")
+    expect((await app.handle(req, { provider: "github" })).status).toBe(200)
+    expect(calls).toBe(0)
+  })
+
+  it("routes signed issue comments and rejects a missing issue or invalid comment ID", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    const seen: number[] = []
+    app.on("github.issue_comment.created", ({ event }) => { seen.push(event.comment.id) })
+    const payload = { action: "created", repository: { full_name: "hibiki/repo" }, issue: { number: 1 }, comment: { id: 42 } }
+    expect((await app.handle(await githubRequest(payload, "issue_comment", "secret"), { provider: "github" })).status).toBe(204)
+    for (const invalid of [{ ...payload, issue: undefined }, { ...payload, comment: { id: "42" } }]) {
+      const response = await app.handle(await githubRequest(invalid, "issue_comment", "secret"), { provider: "github" })
+      expect(response.status).toBe(400)
+      expect(await response.text()).toBe("HIBIKI_PARSE_FAILED")
+    }
+    expect(seen).toEqual([42])
   })
 })

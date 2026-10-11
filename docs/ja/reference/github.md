@@ -45,6 +45,10 @@ const provider = github({
 | --- | --- | --- |
 | `secret` | `string` | GitHub App またはリポジトリ Webhook に設定したシークレット |
 
+### 受信対象の制限
+
+`allowedEvents?: readonly (keyof GitHubEvents)[]` で対応済みイベントの受信対象を絞れます。`allowedRepositories?: readonly string[]` はリポジトリの完全名を指定します。どちらもデフォルトでは制限しません。本文の必須フィールドを検証し、`context.id` には署名付き本文のSHA-256ハッシュを設定します。署名対象外のヘッダーの制約と重複防止は[Webhookを安全に処理する](../guides/security)を参照してください。
+
 ### 検証
 
 1. `sha256=` で始まる `X-Hub-Signature-256` を必須にする

@@ -1,3 +1,7 @@
+import { readBody } from "./body.js"
+import { createMemoryIdempotencyStore, type IdempotencyStore } from "./idempotency.js"
+export { createMemoryIdempotencyStore, type IdempotencyStore, type IdempotencyClaim, type MemoryIdempotencyOptions } from "./idempotency.js"
+
 /** A map from native event names to their parsed payloads. */
 export type EventMap = object
 
@@ -6,6 +10,7 @@ export type SupportedParseResult<TEvents extends EventMap> = {
     kind: "supported"
     eventName: K
     event: TEvents[K]
+    /** A stable ID from authenticated data; used for handler deduplication. */
     id?: string
   }
 }[keyof TEvents & string]
@@ -34,6 +39,7 @@ export type HibikiErrorCode =
   | "HIBIKI_VERIFICATION_FAILED" | "HIBIKI_PARSE_FAILED" | "HIBIKI_UNSUPPORTED_EVENT"
   | "HIBIKI_UNSUPPORTED_CONTENT_TYPE" | "HIBIKI_PROVIDER_NOT_REGISTERED"
   | "HIBIKI_DUPLICATE_HANDLER" | "HIBIKI_HANDLER_FAILED"
+  | "HIBIKI_PAYLOAD_TOO_LARGE" | "HIBIKI_EVENT_IN_PROGRESS" | "HIBIKI_IDEMPOTENCY_UNAVAILABLE"
 
 /** A stable, safe-to-inspect error raised by Hibiki. */
 export class HibikiError extends Error {
@@ -74,7 +80,13 @@ type ContextFor<R extends Registry, N extends RegisteredEventName<R>> =
 type Middleware = (context: HibikiContext, next: () => Promise<void>) => Promise<void> | void
 type Handler = (context: HibikiContext) => Promise<Response | void> | Response | void
 
-export interface HibikiOptions { strictEvents?: boolean }
+export interface HibikiOptions {
+  strictEvents?: boolean
+  /** Maximum raw body bytes, checked before verification. Defaults to 1 MiB. */
+  maxBodyBytes?: number
+  /** Defaults to a bounded, process-local store. Use a shared store in production. */
+  idempotencyStore?: IdempotencyStore
+}
 export interface HandleOptions<R extends Registry> {
   provider: ProviderName<R>
   waitUntil?: (promise: Promise<unknown>) => void
@@ -91,11 +103,16 @@ export class Hibiki<R extends Registry = {}> {
   private readonly handlers: Map<string, Handler>
   private middlewares: readonly Middleware[]
   private readonly options: HibikiOptions
+  private readonly idempotencyStore: IdempotencyStore
 
+  /** Create an application with bounded ingress and a store shared by its builders. */
   constructor(options: HibikiOptions = {}, state?: {
     providers: Map<string, AnyProvider>; handlers: Map<string, Handler>; middlewares: readonly Middleware[]
   }) {
-    this.options = options
+    const maxBodyBytes = options.maxBodyBytes ?? 1_048_576
+    if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes <= 0) throw new TypeError("maxBodyBytes must be a positive safe integer")
+    this.idempotencyStore = options.idempotencyStore ?? createMemoryIdempotencyStore()
+    this.options = { ...options, maxBodyBytes, idempotencyStore: this.idempotencyStore }
     this.providers = state?.providers ?? new Map()
     this.handlers = state?.handlers ?? new Map()
     this.middlewares = state?.middlewares ?? []
@@ -123,10 +140,11 @@ export class Hibiki<R extends Registry = {}> {
 
   /** Verify, parse, route, and handle a webhook request. */
   async handle(request: Request, options: HandleOptions<R>): Promise<Response> {
+    let claim: { key: string; token: string } | undefined
     try {
       const provider = this.providers.get(options.provider)
       if (!provider) throw new HibikiError("HIBIKI_PROVIDER_NOT_REGISTERED", "Provider is not registered", 500)
-      const rawBody = new Uint8Array(await request.clone().arrayBuffer())
+      const rawBody = await readBody(request, this.options.maxBodyBytes!)
       await provider.verify({ rawBody, headers: request.headers, request })
       const contentTypeHeader = request.headers.get("content-type")
       if (provider.contentTypes) {
@@ -145,6 +163,16 @@ export class Hibiki<R extends Registry = {}> {
       }
       const handler = this.handlers.get(`${provider.name}.${parsed.eventName}`)
       if (!handler) return RESPONSE_NO_CONTENT
+      if (parsed.id) {
+        // IDs must originate from signed payloads, never unsigned delivery headers.
+        const key = JSON.stringify([provider.name, parsed.id])
+        let acquired
+        try { acquired = await this.idempotencyStore.claim(key) }
+        catch { throw new HibikiError("HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Idempotency store unavailable", 503) }
+        if (acquired.status === "completed") return RESPONSE_NO_CONTENT
+        if (acquired.status === "pending") throw new HibikiError("HIBIKI_EVENT_IN_PROGRESS", "Webhook event is in progress", 503)
+        claim = { key, token: acquired.token }
+      }
       const context: HibikiContext = {
         event: parsed.event,
         provider: provider.name,
@@ -168,8 +196,23 @@ export class Hibiki<R extends Registry = {}> {
           await dispatch()
         }
       } catch { throw new HibikiError("HIBIKI_HANDLER_FAILED", "Webhook handler failed", 500) }
-      return result instanceof Response ? result : RESPONSE_NO_CONTENT
+      const response = result instanceof Response ? result : RESPONSE_NO_CONTENT
+      if (claim) {
+        const owned = claim
+        // After handler success, a completion failure must keep the claim pending.
+        // Releasing it here could repeat already committed side effects.
+        claim = undefined
+        try {
+          if (response.ok) await this.idempotencyStore.complete(owned.key, owned.token)
+          else await this.idempotencyStore.release(owned.key, owned.token)
+        } catch { throw new HibikiError("HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Idempotency store unavailable", 503) }
+      }
+      return response
     } catch (error) {
+      if (claim) {
+        try { await this.idempotencyStore.release(claim.key, claim.token) }
+        catch { return new Response("HIBIKI_IDEMPOTENCY_UNAVAILABLE", { status: 503 }) }
+      }
       if (error instanceof HibikiError) return new Response(error.code, { status: error.status })
       return RESPONSE_INTERNAL
     }

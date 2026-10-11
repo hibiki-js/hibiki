@@ -117,6 +117,7 @@ export function createDiscordWebhook(url: string, options: DiscordWebhookOptions
 
       const response = await fetcher(requestUrl, {
         method: "POST",
+        redirect: "error",
         ...(typeof body === "string" ? { headers: { "content-type": "application/json" } } : {}),
         body,
       })
@@ -159,14 +160,6 @@ function isInteractionType(value: unknown): value is DiscordInteractionType {
   return typeof value === "number" && Object.hasOwn(EVENT_NAMES, value)
 }
 
-/** Remove expired interaction IDs and report whether an ID was already processed. */
-function isReplay(processedInteractions: Map<string, number>, id: string, now: number): boolean {
-  for (const [processedId, expiresAt] of processedInteractions) {
-    if (expiresAt <= now) processedInteractions.delete(processedId)
-  }
-  return processedInteractions.has(id)
-}
-
 /** Create a Discord Interactions webhook provider using the application's Ed25519 public key. */
 export function discord(options: DiscordOptions): HibikiProvider<"discord", DiscordEvents> {
   const tolerance = options.tolerance ?? 300
@@ -174,7 +167,6 @@ export function discord(options: DiscordOptions): HibikiProvider<"discord", Disc
   const publicKey = fromHex(options.publicKey)
   if (!publicKey || publicKey.length !== 32) throw new TypeError("Discord publicKey must be a 32-byte hexadecimal Ed25519 public key")
   const keyPromise = crypto.subtle.importKey("raw", publicKey as BufferSource, { name: "Ed25519" }, false, ["verify"])
-  const processedInteractions = new Map<string, number>()
 
   return defineProvider<"discord", DiscordEvents>({
     name: "discord",
@@ -201,10 +193,8 @@ export function discord(options: DiscordOptions): HibikiProvider<"discord", Disc
       if (!payload || typeof payload !== "object") throw new Error("Invalid JSON")
       const interaction = payload as { id?: unknown; type?: unknown }
       const id = typeof interaction.id === "string" ? interaction.id : undefined
-      const now = Date.now()
-      if (id && isReplay(processedInteractions, id, now)) return { kind: "unsupported", nativeEventName: "replayed_interaction", id }
-      if (id) processedInteractions.set(id, now + tolerance * 1000)
       if (!isInteractionType(interaction.type)) return { kind: "unsupported", nativeEventName: typeof interaction.type === "number" ? String(interaction.type) : undefined, ...(id ? { id } : {}) }
+      if (!id) throw new Error("Missing Discord interaction ID")
       const eventName = EVENT_NAMES[interaction.type]
       return { kind: "supported", eventName, event: payload as DiscordEvents[typeof eventName], ...(id ? { id } : {}) } as SupportedParseResult<DiscordEvents>
     },

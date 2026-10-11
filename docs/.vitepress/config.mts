@@ -45,6 +45,7 @@ function sidebar(prefix = ""): DefaultTheme.Sidebar {
         { text: "Hono + Stripe", link: `${prefix}/guides/hono-stripe` },
         { text: "Cloudflare + Stripe", link: `${prefix}/guides/cloudflare-stripe` },
         { text: prefix ? "テスト" : "Testing", link: `${prefix}/guides/testing` },
+        { text: prefix ? "セキュリティ" : "Security", link: `${prefix}/guides/security` },
       ],
     },
     {
@@ -66,6 +67,9 @@ export default defineConfig({
   description: "Type-safe webhooks for TypeScript",
   // Published at https://hibiki-js.github.io (org root site)
   base: "/",
+  // Patched esbuild rejects lowering destructuring for Safari 14's syntax bug.
+  // Safari 14.1 supports it; retain the other existing browser targets.
+  vite: { build: { target: ["es2020", "chrome87", "edge88", "firefox78", "safari14.1"] } },
   // Keep .html in generated links for direct static-file URLs.
   cleanUrls: false,
   lastUpdated: true,

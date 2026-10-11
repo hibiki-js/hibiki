@@ -29,11 +29,12 @@ function splitEventName(eventName: string): { provider: string; nativeEventName:
   return { provider: eventName.slice(0, index), nativeEventName: eventName.slice(index + 1) }
 }
 
+/** Build a signed native delivery, assigning distinct IDs to generated Stripe events. */
 async function requestForEvent(provider: string, nativeEventName: string, payload: unknown, secret: string): Promise<Request> {
   if (provider === "stripe") {
     const body = typeof payload === "object" && payload && "type" in payload
       ? payload
-      : { id: "evt_test", type: nativeEventName, data: { object: payload } }
+      : { id: `evt_${crypto.randomUUID()}`, type: nativeEventName, data: { object: payload } }
     return stripeRequest(body, secret)
   }
   if (provider === "github") {

@@ -85,7 +85,7 @@ await webhook.emitEvent("github.push", {
 
 | プロバイダー | 挙動 |
 | --- | --- |
-| Stripe | `payload` がイベント封筒（`type` あり）でなければ `{ id: "evt_test", type: <native>, data: { object: payload } }` で包む |
+| Stripe | `payload` がイベント封筒（`type` あり）でなければ `{ id: "evt_<random UUID>", type: <native>, data: { object: payload } }` で包む |
 | GitHub | `provider.event` / `provider.event.action` に分割。action イベントで `action` が無ければ注入する。`X-GitHub-Event` に GitHub のイベント名を載せる |
 | その他 | throw（組み込みヘルパーは Stripe と GitHub のみ） |
 

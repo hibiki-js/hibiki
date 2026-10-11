@@ -132,3 +132,5 @@ Object helpers exported by this package (`StripeInvoice`, `StripeCharge`, …) d
 - [Stripe provider guide](/providers/stripe) — full supported event list
 - [Next.js + Stripe](/guides/nextjs-stripe) / [Hono + Stripe](/guides/hono-stripe)
 - [Core reference](/reference/core) — `handle`, responses, errors
+
+For body limits, authenticated event IDs, shared deduplication, and retry behavior, see [Secure webhook handling](../guides/security).

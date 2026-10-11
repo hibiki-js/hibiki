@@ -38,7 +38,13 @@ export interface GitHubEvents {
   create: { ref: string; ref_type: string; repository: Repository; [key: string]: unknown }
   delete: { ref: string; ref_type: string; repository: Repository; [key: string]: unknown }
 }
-export interface GitHubOptions { secret: string }
+export interface GitHubOptions {
+  secret: string
+  /** Restrict this endpoint to the native/action event names it needs. */
+  allowedEvents?: readonly (keyof GitHubEvents)[]
+  /** Restrict signed deliveries to these repository full names. */
+  allowedRepositories?: readonly string[]
+}
 
 export interface GitHubWebhookSenderOptions {
   /** Signing secret shared with the webhook receiver. */
@@ -55,6 +61,7 @@ export interface GitHubWebhookSender {
 export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOptions): GitHubWebhookSender {
   const endpoint = new URL(url)
   const fetcher = options.fetch ?? fetch
+  if (typeof options.secret !== "string" || !options.secret.trim()) throw new TypeError("Webhook secret must be a non-empty string")
   const keyPromise = crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
 
   return {
@@ -68,6 +75,7 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
       try {
         response = await fetcher(endpoint, {
           method: "POST",
+          redirect: "error",
           headers: {
             "content-type": "application/json",
             "x-github-event": nativeEventName,
@@ -86,13 +94,12 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
 
 const encoder = new TextEncoder()
 
+/** Decode exactly one SHA-256 digest; reject malformed signature encodings. */
 function fromHex(value: string): Uint8Array | undefined {
-  if (value.length % 2 !== 0) return undefined
+  if (!/^[0-9a-f]{64}$/i.test(value)) return undefined
   const bytes = new Uint8Array(value.length / 2)
   for (let i = 0; i < bytes.length; i++) {
-    const nibble = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16)
-    if (Number.isNaN(nibble)) return undefined
-    bytes[i] = nibble
+    bytes[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16)
   }
   return bytes
 }
@@ -131,8 +138,43 @@ const ACTION_EVENTS: ActionEvent[] = [
   ["deployment_status", "created", "deployment_status.created"],
 ]
 
+/** Accept JSON objects while excluding null and arrays. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+/** Check required fields before exposing typed events to handlers. */
+function validatePayload(eventName: keyof GitHubEvents, payload: Record<string, unknown>): void {
+  /** Check a required string property on a JSON object. */
+  const stringField = (object: unknown, key: string) => isRecord(object) && typeof object[key] === "string"
+  /** Check a required integer ID or issue number on a JSON object. */
+  const numberField = (object: unknown, key: string) => isRecord(object) && Number.isSafeInteger(object[key])
+  let valid = eventName === "ping" ? stringField(payload, "zen") : stringField(payload.repository, "full_name")
+  const name = eventName.split(".", 1)[0]
+  if (name === "push") valid &&= stringField(payload, "ref") && !Object.hasOwn(payload, "ref_type") && !Object.hasOwn(payload, "action")
+  else if (name === "create" || name === "delete") valid &&= stringField(payload, "ref") && (payload.ref_type === "branch" || payload.ref_type === "tag") && !Object.hasOwn(payload, "action")
+  else if (name === "pull_request") {
+    valid &&= numberField(payload.pull_request, "number")
+    if (eventName === "pull_request.labeled") valid &&= stringField(payload.label, "name")
+  } else if (name === "pull_request_review") valid &&= numberField(payload.pull_request, "number") && numberField(payload.review, "id") && stringField(payload.review, "state")
+  else if (name === "issues") valid &&= numberField(payload.issue, "number")
+  else if (name === "issue_comment") valid &&= numberField(payload.issue, "number") && numberField(payload.comment, "id")
+  else if (name === "release") valid &&= stringField(payload.release, "tag_name")
+  else if (name === "workflow_run" || name === "workflow_job" || name === "check_suite" || name === "check_run") {
+    const resource = payload[name]
+    valid &&= numberField(resource, "id") && isRecord(resource) && (resource.conclusion === null || typeof resource.conclusion === "string")
+  } else if (name === "deployment" || name === "deployment_status") {
+    valid &&= numberField(payload.deployment, "id") && stringField(payload.deployment, "environment")
+    if (name === "deployment_status") valid &&= numberField(payload.deployment_status, "id") && stringField(payload.deployment_status, "state")
+  }
+  if (!valid) throw new Error("GitHub payload does not match the event")
+}
+
 /** Create a GitHub JSON webhook provider without Octokit. */
 export function github(options: GitHubOptions): HibikiProvider<"github", GitHubEvents> {
+  const allowedEvents = options.allowedEvents ? new Set(options.allowedEvents) : undefined
+  const allowedRepositories = options.allowedRepositories ? new Set(options.allowedRepositories) : undefined
+  if (typeof options.secret !== "string" || !options.secret.trim()) throw new TypeError("Webhook secret must be a non-empty string")
   const keyPromise = crypto.subtle.importKey("raw", encoder.encode(options.secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"])
   return defineProvider<"github", GitHubEvents>({
     name: "github", contentTypes: ["application/json"],
@@ -146,25 +188,24 @@ export function github(options: GitHubOptions): HibikiProvider<"github", GitHubE
         throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Invalid GitHub signature", 400)
       }
     },
-    async parse({ text, headers }): Promise<ParseResult<GitHubEvents>> {
+    async parse({ rawBody, text, headers }): Promise<ParseResult<GitHubEvents>> {
       const payload: unknown = JSON.parse(text)
-      if (!payload || typeof payload !== "object") throw new Error("Invalid JSON")
+      if (!isRecord(payload)) throw new Error("Invalid JSON")
       const event = headers.get("x-github-event")
-      const action = (payload as { action?: unknown }).action
-      if (event === "push") return { kind: "supported", eventName: "push", event: payload as GitHubEvents["push"] }
-      if (event === "ping") return { kind: "supported", eventName: "ping", event: payload as GitHubEvents["ping"] }
-      if (event === "create") return { kind: "supported", eventName: "create", event: payload as GitHubEvents["create"] }
-      if (event === "delete") return { kind: "supported", eventName: "delete", event: payload as GitHubEvents["delete"] }
-      for (const [name, expectedAction, eventName] of ACTION_EVENTS) {
-        if (event === name && action === expectedAction) {
-          return {
-            kind: "supported",
-            eventName,
-            event: payload as GitHubEvents[typeof eventName],
-          } as SupportedParseResult<GitHubEvents>
-        }
+      const action = payload.action
+      let eventName: keyof GitHubEvents | undefined
+      if (event === "push" || event === "ping" || event === "create" || event === "delete") eventName = event
+      else eventName = ACTION_EVENTS.find(([name, expectedAction]) => event === name && action === expectedAction)?.[2]
+      if (!eventName) return { kind: "unsupported", nativeEventName: event ?? undefined }
+      if (allowedEvents && !allowedEvents.has(eventName)) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub event is not allowed", 400)
+      validatePayload(eventName, payload)
+      if (allowedRepositories && (!isRecord(payload.repository) || !allowedRepositories.has(String(payload.repository.full_name)))) {
+        throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub repository is not allowed", 400)
       }
-      return { kind: "unsupported", nativeEventName: event ?? undefined }
+      // GitHub delivery/event headers are unsigned. Bind deduplication to authenticated bytes.
+      const digest = await crypto.subtle.digest("SHA-256", rawBody as BufferSource)
+      const id = `body:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`
+      return { kind: "supported", eventName, event: payload, id } as SupportedParseResult<GitHubEvents>
     },
   })
 }

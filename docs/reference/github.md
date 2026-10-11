@@ -45,6 +45,10 @@ Returns `HibikiProvider<"github", GitHubEvents>`.
 | --- | --- | --- |
 | `secret` | `string` | Webhook secret configured in the GitHub App or repository webhook settings |
 
+### Allowed deliveries
+
+`allowedEvents?: readonly (keyof GitHubEvents)[]` restricts supported event routes. `allowedRepositories?: readonly string[]` restricts repository full names. Both default to unrestricted. Required payload fields are validated; `context.id` is a SHA-256 hash of the signed raw body, not the unsigned delivery header. See [Secure webhook handling](../guides/security) for unsigned-header limitations and replay protection.
+
 ### Verification
 
 1. Require `X-Hub-Signature-256` starting with `sha256=`

@@ -19,6 +19,8 @@ You need Node.js 22 or later and pnpm 10.4.1. From the repository root, install 
 pnpm install
 ```
 
+The root `pnpm.overrides` pins patched Vite, esbuild, Tinypool, and source-map-js releases in the development toolchain. VitePress 1.x still requests Vite 5; the Vite 6 override is verified by `pnpm docs:build`. The documentation build targets Safari 14.1+ because patched esbuild cannot lower destructuring for Safari 14's JavaScript bug ([upstream explanation](https://github.com/evanw/esbuild/issues/4436)). Keep these security overrides until upstream dependencies require patched releases themselves. Run `pnpm audit` after dependency changes.
+
 ## Making changes
 
 - Keep Hibiki simple, lightweight, and fast. Include only functionality that serves a clear need; avoid unnecessary dependencies, abstractions, and bundled features.
