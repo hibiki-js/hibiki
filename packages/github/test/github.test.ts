@@ -260,3 +260,43 @@ describe("Strict signature encoding", () => {
     expect((await app.handle(req, { provider: "github" })).status).toBe(400)
   })
 })
+
+
+describe("GitHub request edge cases", () => {
+  it.each([undefined, "sha1=0123"])("rejects a missing or wrong signature scheme: %s", async signature => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.push", () => { calls++ })
+    const req = await githubRequest({ ref: "main", repository: { full_name: "hibiki/repo" } }, "push", "secret")
+    if (signature) req.headers.set("x-hub-signature-256", signature)
+    else req.headers.delete("x-hub-signature-256")
+    const response = await app.handle(req, { provider: "github" })
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
+    expect(calls).toBe(0)
+  })
+
+  it("acknowledges a signed delivery without an event header as unsupported", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.push", () => { calls++ })
+    const req = await githubRequest({ ref: "main", repository: { full_name: "hibiki/repo" } }, "push", "secret")
+    req.headers.delete("x-github-event")
+    expect((await app.handle(req, { provider: "github" })).status).toBe(200)
+    expect(calls).toBe(0)
+  })
+
+  it("routes signed issue comments and rejects a missing issue or invalid comment ID", async () => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    const seen: number[] = []
+    app.on("github.issue_comment.created", ({ event }) => { seen.push(event.comment.id) })
+    const payload = { action: "created", repository: { full_name: "hibiki/repo" }, issue: { number: 1 }, comment: { id: 42 } }
+    expect((await app.handle(await githubRequest(payload, "issue_comment", "secret"), { provider: "github" })).status).toBe(204)
+    for (const invalid of [{ ...payload, issue: undefined }, { ...payload, comment: { id: "42" } }]) {
+      const response = await app.handle(await githubRequest(invalid, "issue_comment", "secret"), { provider: "github" })
+      expect(response.status).toBe(400)
+      expect(await response.text()).toBe("HIBIKI_PARSE_FAILED")
+    }
+    expect(seen).toEqual([42])
+  })
+})

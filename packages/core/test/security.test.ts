@@ -41,6 +41,21 @@ describe("Webhook resource limits", () => {
     expect(verify).not.toHaveBeenCalled()
   })
 
+  it("verifies and handles an empty request body", async () => {
+    const verify = vi.fn(async ({ rawBody }: { rawBody: Uint8Array }) => {
+      expect(rawBody.byteLength).toBe(0)
+    })
+    const app = new Hibiki().use({ ...eventProvider, verify })
+    const handler = vi.fn(async ({ request }: { request: Request }) => {
+      expect(await request.text()).toBe("")
+    })
+    app.on("example.ping", handler)
+    const req = new Request("https://test", { method: "POST" })
+    expect((await app.handle(req, { provider: "example" })).status).toBe(204)
+    expect(verify).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
   it("accepts exactly the limit and preserves raw request bytes", async () => {
     const app = new Hibiki({ maxBodyBytes: 4 }).use(eventProvider)
     app.on("example.ping", async ({ request }) => { expect(await request.text()).toBe("1234") })
@@ -125,6 +140,21 @@ describe("Authenticated event idempotency", () => {
     expect((await handle(app)).status).toBe(503)
     expect(handler).not.toHaveBeenCalled()
   })
+
+  it("keeps a failed handler claimed when the store cannot release it", async () => {
+    const memory = createMemoryIdempotencyStore()
+    const release = vi.fn(async () => { throw new Error("storage failed") })
+    const handler = vi.fn(() => { throw new Error("handler failed") })
+    const app = new Hibiki({ idempotencyStore: { ...memory, release } })
+      .use(eventProvider).on("example.ping", handler)
+    const response = await handle(app)
+    expect(response.status).toBe(503)
+    expect(await response.text()).toBe("HIBIKI_IDEMPOTENCY_UNAVAILABLE")
+    expect((await handle(app)).status).toBe(503)
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
   it("keeps successful effects claimed when completion storage fails", async () => {
     const memory = createMemoryIdempotencyStore()
     const release = vi.fn(memory.release)
@@ -143,6 +173,14 @@ describe("Authenticated event idempotency", () => {
 })
 
 describe("Bounded memory store", () => {
+  it.each([0, -1, NaN, Infinity])("rejects invalid retention: %s", retentionMs => {
+    expect(() => createMemoryIdempotencyStore({ retentionMs })).toThrow("retentionMs must be a positive finite number")
+  })
+
+  it.each([0, -1, NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1])("rejects invalid capacity: %s", maxEntries => {
+    expect(() => createMemoryIdempotencyStore({ maxEntries })).toThrow("maxEntries must be a positive safe integer")
+  })
+
   it("retains completed entries until expiry and rejects new IDs at capacity", async () => {
     vi.useFakeTimers()
     try {

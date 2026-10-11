@@ -7,8 +7,11 @@ export type IdempotencyClaim =
 
 /** Shared stores must claim atomically and complete/release only the matching token. */
 export interface IdempotencyStore {
+  /** Atomically claim a new ID or report an existing running/completed claim. */
   claim(key: string): Promise<IdempotencyClaim>
+  /** Mark only the token owner's running claim completed. */
   complete(key: string, token: string): Promise<void>
+  /** Remove only the token owner's running claim, preserving completed IDs. */
   release(key: string, token: string): Promise<void>
 }
 

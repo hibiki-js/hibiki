@@ -145,6 +145,7 @@ function isSupportedEvent(type: string): type is keyof StripeEvents {
 
 const encoder = new TextEncoder()
 
+/** Decode exactly one SHA-256 digest; reject malformed signature encodings. */
 function fromHex(value: string): Uint8Array | undefined {
   if (!/^[0-9a-f]{64}$/i.test(value)) return undefined
   const bytes = new Uint8Array(value.length / 2)

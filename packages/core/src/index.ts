@@ -105,6 +105,7 @@ export class Hibiki<R extends Registry = {}> {
   private readonly options: HibikiOptions
   private readonly idempotencyStore: IdempotencyStore
 
+  /** Create an application with bounded ingress and a store shared by its builders. */
   constructor(options: HibikiOptions = {}, state?: {
     providers: Map<string, AnyProvider>; handlers: Map<string, Handler>; middlewares: readonly Middleware[]
   }) {

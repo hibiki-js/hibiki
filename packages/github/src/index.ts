@@ -94,6 +94,7 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
 
 const encoder = new TextEncoder()
 
+/** Decode exactly one SHA-256 digest; reject malformed signature encodings. */
 function fromHex(value: string): Uint8Array | undefined {
   if (!/^[0-9a-f]{64}$/i.test(value)) return undefined
   const bytes = new Uint8Array(value.length / 2)
@@ -137,13 +138,16 @@ const ACTION_EVENTS: ActionEvent[] = [
   ["deployment_status", "created", "deployment_status.created"],
 ]
 
+/** Accept JSON objects while excluding null and arrays. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
 /** Check required fields before exposing typed events to handlers. */
 function validatePayload(eventName: keyof GitHubEvents, payload: Record<string, unknown>): void {
+  /** Check a required string property on a JSON object. */
   const stringField = (object: unknown, key: string) => isRecord(object) && typeof object[key] === "string"
+  /** Check a required integer ID or issue number on a JSON object. */
   const numberField = (object: unknown, key: string) => isRecord(object) && Number.isSafeInteger(object[key])
   let valid = eventName === "ping" ? stringField(payload, "zen") : stringField(payload.repository, "full_name")
   const name = eventName.split(".", 1)[0]
