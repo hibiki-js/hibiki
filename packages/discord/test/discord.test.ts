@@ -44,6 +44,72 @@ describe("Discord provider", () => {
     expect(message).toEqual({ id: "456", channel_id: "789", content: "sent" })
   })
 
+  it.each([1, 2])("uploads %i files with the message and preserves send options", async count => {
+    const files = [
+      { filename: "image.png", data: new Blob([new Uint8Array([0, 255, 1])], { type: "image/png" }) },
+      { filename: "report.txt", data: new File(["report"], "original.txt", { type: "text/plain" }) },
+    ].slice(0, count)
+    const payload = {
+      content: "Report",
+      embeds: [{ image: { url: "attachment://image.png" } }],
+      components: [{ type: 1 }],
+      attachments: [{ id: 0, filename: "image.png", description: "Preview" }],
+    }
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default", {
+      fetch: async (input, init) => {
+        const url = new URL(input.toString())
+        expect(url.searchParams.get("thread_id")).toBe("thread")
+        expect(url.searchParams.get("wait")).toBe(String(count === 1))
+        expect(url.searchParams.get("with_components")).toBe("true")
+        expect(init?.method).toBe("POST")
+        expect(new Headers(init?.headers).has("content-type")).toBe(false)
+        expect(init?.body).toBeInstanceOf(FormData)
+        const form = init?.body as FormData
+        expect([...form.keys()]).toEqual(["payload_json", ...files.map((_, i) => `files[${i}]`)])
+        expect(JSON.parse(form.get("payload_json") as string)).toEqual(payload)
+        // Exercise runtime boundary generation and multipart decoding as well.
+        const request = new Request(input, init)
+        expect(request.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/)
+        const decoded = await request.formData()
+        for (const [index, file] of files.entries()) {
+          const uploaded = decoded.get(`files[${index}]`) as File
+          expect(uploaded.name).toBe(file.filename)
+          expect(uploaded.type).toBe(file.data.type)
+          expect(await uploaded.arrayBuffer()).toEqual(await file.data.arrayBuffer())
+        }
+        return count === 1 ? Response.json({ id: "456", channel_id: "789" }) : new Response(null, { status: 204 })
+      },
+    })
+    const message = await webhook.send(payload, { files, threadId: "thread", wait: count === 1 })
+    expect(message).toEqual(count === 1 ? { id: "456", channel_id: "789" } : undefined)
+    expect(payload.attachments).toEqual([{ id: 0, filename: "image.png", description: "Preview" }])
+  })
+
+  it("sends a file-only message and preserves the URL thread and default wait", async () => {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default&with_components=true", {
+      fetch: async (input, init) => {
+        const url = new URL(input.toString())
+        expect(url.searchParams.get("thread_id")).toBe("default")
+        expect(url.searchParams.get("wait")).toBe("true")
+        expect(url.searchParams.has("with_components")).toBe(false)
+        expect((init?.body as FormData).get("payload_json")).toBe("{}")
+        return Response.json({ id: "456", channel_id: "789" })
+      },
+    })
+    await webhook.send({}, { files: [{ filename: "log.txt", data: new Blob(["log"]) }] })
+  })
+
+  it("keeps JSON transport for an empty file list", async () => {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async (_, init) => {
+        expect(new Headers(init?.headers).get("content-type")).toBe("application/json")
+        expect(init?.body).toBe('{"content":"hello"}')
+        return new Response(null, { status: 204 })
+      },
+    })
+    await webhook.send({ content: "hello" }, { files: [] })
+  })
+
   it("uses 204 for wait=false, preserves URL thread IDs, and omits with_components without components", async () => {
     let requestUrl: URL | undefined
     const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=default&with_components=true", {

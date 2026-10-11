@@ -29,7 +29,7 @@ Discord のエンドポイント検証には、`discord.ping` から `{ type: 1 
 
 ## メッセージの送信
 
-`createDiscordWebhook(url)` を使うと、Discord の受信Webhookへ JSON メッセージを送れます。URL には Discord のチャンネル連携設定で発行したものを指定します。
+`createDiscordWebhook(url)` を使うと、Discord の受信Webhookへ メッセージを送れます。URL には Discord のチャンネル連携設定で発行したものを指定します。
 
 ```ts
 import { createDiscordWebhook } from "@hibiki-js/discord"
@@ -42,7 +42,7 @@ const message = await webhook.send({
 })
 ```
 
-`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。`components` を含む場合は、Discord が処理できるよう `with_components=true` を設定します。HTTP エラー時は、取得できれば Discord のエラーメッセージを含む例外を投げます。JSON 形式の送信に対応し、ファイルアップロードには対応していません。
+`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。`components` を含む場合は、Discord が処理できるよう `with_components=true` を設定します。HTTP エラー時は、取得できれば Discord のエラーメッセージを含む例外を投げます。
 
 | Export | 説明 |
 | --- | --- |
@@ -50,8 +50,33 @@ const message = await webhook.send({
 | `DiscordWebhookPayload` | JSON メッセージの型 |
 | `DiscordEmbed` | リッチEmbedの型 |
 | `DiscordWebhookMessage` | Discord が返すメッセージの型 |
-| `DiscordWebhookSendOptions` | 送信ごとの `threadId` / `wait` オプション |
+| `DiscordWebhookSendOptions` | 送信ごとの `files` / `threadId` / `wait` オプション |
+| `DiscordWebhookFile` | 添付ファイルの型 `{ filename: string, data: Blob }` |
 | `DiscordWebhookOptions` | クライアントのオプション |
+
+### ファイルの添付
+
+第2引数の `files` 配列に添付ファイルを指定します。`DiscordWebhookFile` の必須項目は `filename: string` と `data: Blob` です。`data` にはWeb標準の `File` も渡せます。アップロード時の名前には、明示した `filename` が使われます。
+
+```ts
+await webhook.send({
+  content: "デプロイのレポート",
+  embeds: [{ image: { url: "attachment://preview.png" } }],
+}, {
+  threadId: "123456789",
+  wait: true,
+  files: [
+    { filename: "preview.png", data: new Blob([imageBytes], { type: "image/png" }) },
+    { filename: "report.txt", data: new Blob(["デプロイ成功"], { type: "text/plain" }) },
+  ],
+})
+```
+
+ファイルがある場合は `multipart/form-data` で送信し、メッセージを `payload_json`、ファイルを0始まりの `files[n]` フィールドに格納します。ファイルを省略するか `files: []` を指定するとJSON形式で送信します。どちらの形式でも、テキスト、Embed、components、`threadId`、`wait` を併用できます。ファイルだけを送る場合はメッセージに `{}` を指定できます。
+
+実行環境にはWeb標準の `Blob`、`FormData`、`fetch` が必要です（Node.js 22以降では利用できます）。独自の `fetch` を指定する場合も `FormData` を受け付け、`Content-Type` と境界文字列の生成をランタイムに任せてください。ファイルパス、ストリーム、バイト配列は直接渡せません。バイト列は `Blob` に包んでください。添付数やサイズの制限はDiscord側で適用されます。[Execute Webhook](https://discord.com/developers/docs/resources/webhook#execute-webhook) と [Uploading Files](https://discord.com/developers/docs/reference#uploading-files) を参照してください。
+
+説明文を付ける場合は、メッセージの `attachments` にファイルの0始まりの添字と一致する `id` を指定します。例: `{ id: 0, filename: "preview.png", description: "デプロイのプレビュー" }`。クライアントはこのメタデータをそのまま送信します。EmbedのURLからは `attachment://filename` で添付ファイルを参照できます。
 
 ## イベント名
 

@@ -67,7 +67,15 @@ export interface DiscordEmbed {
   [key: string]: unknown
 }
 
+/** A named binary file to upload with a webhook message. File is also accepted as data. */
+export interface DiscordWebhookFile {
+  filename: string
+  data: Blob
+}
+
 export interface DiscordWebhookSendOptions {
+  /** Files to attach. An omitted or empty list sends a JSON request. */
+  files?: readonly DiscordWebhookFile[]
   /** Send the message to an existing thread in the webhook's channel. */
   threadId?: string
   /** Wait for Discord to confirm delivery and return the created message. Defaults to true. */
@@ -79,12 +87,12 @@ export interface DiscordWebhookOptions {
   fetch?: typeof fetch
 }
 
-/** A small client for sending JSON messages to an incoming Discord webhook. */
+/** A small client for sending messages to an incoming Discord webhook. */
 export interface DiscordWebhook {
   send(payload: DiscordWebhookPayload, options?: DiscordWebhookSendOptions): Promise<DiscordWebhookMessage | undefined>
 }
 
-/** Create a client for sending JSON messages to an incoming Discord webhook URL. */
+/** Create a client for sending messages to an incoming Discord webhook URL. */
 export function createDiscordWebhook(url: string, options: DiscordWebhookOptions = {}): DiscordWebhook {
   const endpoint = new URL(url)
   const fetcher = options.fetch ?? fetch
@@ -97,10 +105,20 @@ export function createDiscordWebhook(url: string, options: DiscordWebhookOptions
       if (payload.components) requestUrl.searchParams.set("with_components", "true")
       else requestUrl.searchParams.delete("with_components")
 
+      let body: string | FormData = JSON.stringify(payload)
+      if (sendOptions.files?.length) {
+        const form = new FormData()
+        form.append("payload_json", body)
+        sendOptions.files.forEach((file, index) => {
+          form.append(`files[${index}]`, file.data, file.filename)
+        })
+        body = form
+      }
+
       const response = await fetcher(requestUrl, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        ...(typeof body === "string" ? { headers: { "content-type": "application/json" } } : {}),
+        body,
       })
 
       if (!response.ok) {
