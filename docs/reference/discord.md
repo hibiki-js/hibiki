@@ -29,7 +29,7 @@ The provider also suppresses duplicate interaction IDs in memory for the toleran
 
 ## Sending messages
 
-Use `createDiscordWebhook(url)` to post JSON messages to an incoming Discord webhook. The URL is the one generated in Discord's channel integration settings.
+Use `createDiscordWebhook(url)` to post messages to an incoming Discord webhook. The URL is the one generated in Discord's channel integration settings.
 
 ```ts
 import { createDiscordWebhook } from "@hibiki-js/discord"
@@ -42,7 +42,7 @@ const message = await webhook.send({
 })
 ```
 
-`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). If `components` are present, the client sets `with_components=true` so Discord processes them. Failed HTTP responses throw an error with Discord's message when available. This client sends JSON payloads; file uploads are not included.
+`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). If `components` are present, the client sets `with_components=true` so Discord processes them. Failed HTTP responses throw an error with Discord's message when available.
 
 | Export | Description |
 | --- | --- |
@@ -50,8 +50,33 @@ const message = await webhook.send({
 | `DiscordWebhookPayload` | JSON message payload |
 | `DiscordEmbed` | Rich embed payload |
 | `DiscordWebhookMessage` | Message returned by Discord |
-| `DiscordWebhookSendOptions` | Per-send `threadId` and `wait` options |
+| `DiscordWebhookSendOptions` | Per-send `files`, `threadId`, and `wait` options |
+| `DiscordWebhookFile` | `{ filename: string, data: Blob }` upload |
 | `DiscordWebhookOptions` | Sender options |
+
+### File attachments
+
+Pass a `files` array in the second argument. Each `DiscordWebhookFile` has a required `filename: string` and `data: Blob`; a Web standard `File` can also be used as `data`. The explicit `filename` determines the uploaded name.
+
+```ts
+await webhook.send({
+  content: "Deployment report",
+  embeds: [{ image: { url: "attachment://preview.png" } }],
+}, {
+  threadId: "123456789",
+  wait: true,
+  files: [
+    { filename: "preview.png", data: new Blob([imageBytes], { type: "image/png" }) },
+    { filename: "report.txt", data: new Blob(["Deployment succeeded"], { type: "text/plain" }) },
+  ],
+})
+```
+
+With files, the client sends `multipart/form-data` containing `payload_json` and zero-indexed `files[n]` fields. Without files (or with `files: []`), it sends JSON. Text, embeds, components, `threadId`, and `wait` work with either transport. A file-only message can use `{}` as its payload.
+
+The runtime must provide Web standard `Blob`, `FormData`, and `fetch` (Node.js 22+ does). A custom `fetch` must accept `FormData` and let the runtime generate `Content-Type` and its boundary. Paths, streams, and raw byte arrays are not accepted directly; wrap bytes in a `Blob`. Upload count and size limits are enforced by Discord; see [Execute Webhook](https://discord.com/developers/docs/resources/webhook#execute-webhook) and [Uploading Files](https://discord.com/developers/docs/reference#uploading-files).
+
+To add descriptions, supply `attachments` in the message payload with an `id` matching the file's zero-based index, for example `{ id: 0, filename: "preview.png", description: "Deployment preview" }`. The client preserves this metadata as supplied. Embed URLs can reference an uploaded filename using `attachment://filename`.
 
 ## Event names
 
