@@ -2,6 +2,8 @@
 
 Official Stripe webhook provider for Hibiki. It verifies `Stripe-Signature` with Web Crypto and exposes a curated set of typed events. The Stripe Node SDK is **not** a dependency.
 
+`stripeEvents` exposes the readonly native event list. `StripeCheckoutSession`, `StripePaymentIntent`, and `StripeCustomer` include common optional business fields; `StripeDeletedCustomer` distinguishes deleted expanded customers. See the [provider guide](/providers/stripe) for snapshot-only coverage and type/version limitations.
+
 ## Install
 
 ```bash

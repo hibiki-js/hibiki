@@ -1,9 +1,22 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { createGitHubWebhook, github } from "../src/index.js"
+import { createGitHubWebhook, github, githubEvents } from "../src/index.js"
+import { readFileSync } from "node:fs"
 import { createWebhookTest, githubRequest } from "@hibiki-js/testing"
 
 describe("GitHub provider", () => {
+  it("keeps typed coverage, exported names and runtime actions in sync", async () => {
+    const coverage = JSON.parse(readFileSync(new URL("../../../docs/public/providers.json", import.meta.url), "utf8"))
+    expect([...githubEvents].sort()).toEqual(coverage.providers.github.events)
+    expect(new Set(githubEvents).size).toBe(githubEvents.length)
+    const provider = github({ secret: "secret" })
+    for (const name of githubEvents) {
+      const [event, action] = name.split(".", 2)
+      const text = JSON.stringify(action ? { action } : {})
+      const result = await provider.parse({ text, rawBody: new TextEncoder().encode(text), headers: new Headers({ "x-github-event": event! }), request: new Request("https://test") })
+      expect(result.kind).toBe("supported")
+    }
+  })
   it("sends a GitHub-signed action event that the provider can verify", async () => {
     const secret = "github_sender_secret"
     const app = new Hibiki().use(github({ secret }))

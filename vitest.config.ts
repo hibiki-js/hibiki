@@ -8,6 +8,8 @@ export default defineConfig({
       "@hibiki-js/stripe": fileURLToPath(new URL("./packages/stripe/src/index.ts", import.meta.url)),
       "@hibiki-js/github": fileURLToPath(new URL("./packages/github/src/index.ts", import.meta.url)),
       "@hibiki-js/testing": fileURLToPath(new URL("./packages/testing/src/index.ts", import.meta.url)),
+      "@hibiki-js/hono": fileURLToPath(new URL("./packages/hono/src/index.ts", import.meta.url)),
+      "@hibiki-js/discord": fileURLToPath(new URL("./packages/discord/src/index.ts", import.meta.url)),
     },
   },
   test: {

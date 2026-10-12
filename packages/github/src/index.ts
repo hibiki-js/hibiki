@@ -1,8 +1,29 @@
 import { defineProvider, HibikiError, type HibikiProvider, type ParseResult, type SupportedParseResult } from "@hibiki-js/core"
 
-interface Repository { full_name: string; [key: string]: unknown }
-interface PullRequest { number: number; [key: string]: unknown }
-interface Issue { number: number; [key: string]: unknown }
+export interface GitHubUser { login: string; id?: number; [key: string]: unknown }
+export interface Repository { full_name: string; name?: string; html_url?: string; private?: boolean; [key: string]: unknown }
+export interface PullRequest {
+  number: number
+  title?: string
+  body?: string | null
+  state?: "open" | "closed"
+  merged?: boolean | null
+  html_url?: string
+  user?: GitHubUser
+  head?: { ref: string; sha: string; [key: string]: unknown }
+  base?: { ref: string; sha: string; [key: string]: unknown }
+  [key: string]: unknown
+}
+export interface Issue {
+  number: number
+  title?: string
+  body?: string | null
+  state?: "open" | "closed"
+  html_url?: string
+  user?: GitHubUser
+  labels?: Label[]
+  [key: string]: unknown
+}
 interface Comment { id: number; body?: string; [key: string]: unknown }
 interface Review { id: number; state: string; [key: string]: unknown }
 interface Label { name: string; [key: string]: unknown }
@@ -169,6 +190,10 @@ function validatePayload(eventName: keyof GitHubEvents, payload: Record<string, 
   }
   if (!valid) throw new Error("GitHub payload does not match the event")
 }
+/** Native events/actions supported by this release. */
+export const githubEvents: readonly (keyof GitHubEvents)[] = Object.freeze([
+  "push", "ping", "create", "delete", ...ACTION_EVENTS.map(([, , eventName]) => eventName),
+] as (keyof GitHubEvents)[])
 
 /** Create a GitHub JSON webhook provider without Octokit. */
 export function github(options: GitHubOptions): HibikiProvider<"github", GitHubEvents> {

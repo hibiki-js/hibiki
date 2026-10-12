@@ -10,7 +10,14 @@ await new Promise((resolve, reject) => {
     stdio: "inherit",
     env: process.env,
   })
+  child.on("error", reject)
   child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`examples typecheck failed: ${code}`))))
 })
 
 console.log(`Checked examples: ${dirs.join(", ")}`)
+
+await new Promise((resolve, reject) => {
+  const child = spawn("pnpm", ["exec", "vitest", "run", "examples/"], { stdio: "inherit" })
+  child.on("error", reject)
+  child.on("exit", code => code === 0 ? resolve() : reject(new Error(`examples runtime check failed: ${code}`)))
+})

@@ -12,6 +12,10 @@ const app = new Hibiki().use(stripe({
 
 Signature verification uses Web Crypto HMAC-SHA256 and does not depend on the Stripe SDK. Other Stripe events return 200 by default (or 400 with `strictEvents: true`).
 
+This provider supports **snapshot events** with `data.object`, not thin events. Types are curated subsets, not full SDK types or runtime business validation. Common Checkout Session fields (amounts, payment status, metadata, customer) and PaymentIntent/Customer fields are typed and optional for older payloads/minimal fixtures. Additional fields remain `unknown`; validate business requirements explicitly. There is no pinned upstream Stripe API version. The event's `api_version` determines its payload version.
+
+`stripeEvents` exports the readonly native event list for the installed package. [Provider coverage](/providers.json) also includes package versions and formats.
+
 ## Supported events
 
 ### Checkout

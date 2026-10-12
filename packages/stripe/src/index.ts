@@ -4,14 +4,47 @@ type StripeObject<TObject extends string> = { id: string; object: TObject; [key:
 type StripeEvent<TType extends string, TObject> = {
   id: string
   type: TType
+  api_version?: string | null
+  created?: number
+  livemode?: boolean
   data: { object: TObject }
   [key: string]: unknown
 }
 
-export type StripeCheckoutSession = StripeObject<"checkout.session">
-export type StripePaymentIntent = StripeObject<"payment_intent">
+/** Curated snapshot fields reviewed against docs.stripe.com/api/checkout/sessions/object.
+ * Optional for older API versions and minimal fixtures; not runtime validation.
+ */
+export type StripeCheckoutSession = StripeObject<"checkout.session"> & {
+  amount_total?: number | null
+  amount_subtotal?: number | null
+  currency?: string | null
+  client_reference_id?: string | null
+  customer?: string | StripeCustomer | StripeDeletedCustomer | null
+  customer_email?: string | null
+  customer_details?: { email?: string | null; name?: string | null; [key: string]: unknown } | null
+  payment_status?: "paid" | "unpaid" | "no_payment_required"
+  status?: "open" | "complete" | "expired" | null
+  mode?: "payment" | "setup" | "subscription"
+  metadata?: Record<string, string> | null
+  payment_intent?: string | StripePaymentIntent | null
+  subscription?: string | StripeSubscription | null
+}
+export type StripePaymentIntent = StripeObject<"payment_intent"> & {
+  amount?: number
+  amount_received?: number
+  currency?: string
+  status?: "requires_payment_method" | "requires_confirmation" | "requires_action" | "processing" | "requires_capture" | "canceled" | "succeeded"
+  customer?: string | StripeCustomer | StripeDeletedCustomer | null
+  metadata?: Record<string, string>
+}
 export type StripeInvoice = StripeObject<"invoice">
-export type StripeCustomer = StripeObject<"customer">
+export type StripeCustomer = StripeObject<"customer"> & {
+  email?: string | null
+  name?: string | null
+  metadata?: Record<string, string>
+  deleted?: false
+}
+export type StripeDeletedCustomer = StripeObject<"customer"> & { deleted: true }
 export type StripeSubscription = StripeObject<"subscription">
 export type StripeCharge = StripeObject<"charge">
 export type StripePaymentMethod = StripeObject<"payment_method">
@@ -36,7 +69,7 @@ export interface StripeEvents {
   "invoice.created": StripeEvent<"invoice.created", StripeInvoice>
   "customer.created": StripeEvent<"customer.created", StripeCustomer>
   "customer.updated": StripeEvent<"customer.updated", StripeCustomer>
-  "customer.deleted": StripeEvent<"customer.deleted", StripeCustomer>
+  "customer.deleted": StripeEvent<"customer.deleted", StripeCustomer | StripeDeletedCustomer>
   "customer.subscription.created": StripeEvent<"customer.subscription.created", StripeSubscription>
   "customer.subscription.updated": StripeEvent<"customer.subscription.updated", StripeSubscription>
   "customer.subscription.deleted": StripeEvent<"customer.subscription.deleted", StripeSubscription>
@@ -138,6 +171,9 @@ const SUPPORTED_EVENTS = {
   "payment_method.attached": true,
   "payment_method.detached": true,
 } as const satisfies Record<keyof StripeEvents, true>
+
+/** Native snapshot event names supported by this release. */
+export const stripeEvents: readonly (keyof StripeEvents)[] = Object.freeze(Object.keys(SUPPORTED_EVENTS) as (keyof StripeEvents)[])
 
 function isSupportedEvent(type: string): type is keyof StripeEvents {
   return Object.hasOwn(SUPPORTED_EVENTS, type)

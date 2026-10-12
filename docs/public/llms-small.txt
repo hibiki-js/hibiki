@@ -1,0 +1,3 @@
+# Hibiki
+
+TypeScript webhooks on Web Standards Request/Response. Core and providers have no runtime dependencies. Register providers with new Hibiki().use(...), handlers with .on(...), and call .handle(request, { provider }). Stripe snapshot events, GitHub JSON deliveries, and Discord Interactions are supported. Hibiki does not provide durable storage, queues, automatic retries, or global deduplication. See https://hibiki-js.github.io/llms.txt for task-specific references.
