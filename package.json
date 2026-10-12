@@ -15,7 +15,12 @@
     "generate:types": "node scripts/generate-provider-types.mjs",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "generate:agent-docs": "node scripts/generate-agent-docs.mjs",
+    "check:agent-docs": "node scripts/generate-agent-docs.mjs --check",
+    "check:evals": "node --test evals/self-check.mjs evals/source-metrics-check.mjs",
+    "eval:agents": "node evals/run.mjs",
+    "eval:compare": "node evals/compare.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -22,6 +22,7 @@ function sidebar(prefix = ""): DefaultTheme.Sidebar {
       text: guideLabel,
       items: [
         { text: prefix ? "はじめに" : "Getting Started", link: `${prefix}/guide/getting-started` },
+        { text: prefix ? "Hibikiを選ぶ条件" : "Choosing Hibiki", link: `${prefix}/guide/choosing-hibiki` },
         { text: prefix ? "コンセプト" : "Concepts", link: `${prefix}/guide/concepts` },
         { text: prefix ? "エラー処理" : "Error Handling", link: `${prefix}/guide/error-handling` },
       ],

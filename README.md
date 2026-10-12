@@ -48,6 +48,8 @@ app.on("github.issues.opened", async ({ event }) => {
 
 Provider-specific verification and parsing stay inside the provider package.
 
+Use Hibiki when a common webhook model across providers or zero provider runtime dependencies matters. An existing SDK can be enough for a single-provider app. Hibiki leaves durable storage, queues, retries and idempotency to your application. See [Choosing Hibiki](./docs/guide/choosing-hibiki.md) for coverage and tradeoffs.
+
 ## Features
 
 - Type-safe event handlers
@@ -113,6 +115,12 @@ Examples are available for:
 - Hono + GitHub
 
 See [`examples/`](./examples).
+
+[`examples/hono-webhooks`](./examples/hono-webhooks) injects business services and tests Stripe/GitHub through actual Hono routes, including side effects and invalid signatures. Run `pnpm check:examples` in this repository.
+
+## Coding agents
+
+Use the [reference index](https://hibiki-js.github.io/llms.txt) and [versioned provider coverage](https://hibiki-js.github.io/providers.json). The optional [Hibiki skill](./skills/hibiki/SKILL.md) covers implementation and local verification. [Agent evaluations](./evals/README.md) measure neutral selection, provider SDK/direct implementation comparisons, and changes to existing Hibiki applications. Model runs are opt-in.
 
 ## Documentation
 

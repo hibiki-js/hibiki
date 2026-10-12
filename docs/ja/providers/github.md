@@ -1,5 +1,7 @@
 # GitHub
 
+`githubEvents`から、導入したパッケージの対応イベントとactionの一覧を取得できます。JSON形式の配信に対応しています。Issue・Pull Requestのタイトル、本文、状態、作成者、ブランチ情報などに省略可能な型があり、その他は`unknown`です。型による業務データの実行時検証は行いません。[対応範囲のJSON](/providers.json)にパッケージバージョンと形式を載せています。
+
 ```ts
 import { Hibiki } from "@hibiki-js/core"
 import { github } from "@hibiki-js/github"

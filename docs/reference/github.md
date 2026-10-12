@@ -1,5 +1,7 @@
 # `@hibiki-js/github`
 
+`githubEvents` exposes the readonly event/action list. `Repository`, `Issue`, `PullRequest` and `GitHubUser` are exported structural types with common optional business fields. Additional fields remain `unknown`; see [coverage](/providers/github).
+
 Official GitHub webhook provider for Hibiki. It verifies `X-Hub-Signature-256` with Web Crypto and exposes a curated set of typed JSON events. Octokit is **not** a dependency.
 
 ## Install

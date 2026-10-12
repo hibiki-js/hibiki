@@ -1,5 +1,7 @@
 # `@hibiki-js/github`
 
+`githubEvents`から対応イベントとactionの一覧を取得できます。`Repository`、`Issue`、`PullRequest`、`GitHubUser`は、主要な業務フィールドの省略可能な型を持つ公開の構造型です。その他は`unknown`です。[対応範囲](/ja/providers/github)も参照してください。
+
 Hibiki 向けの公式 GitHub Webhook プロバイダーです。`X-Hub-Signature-256` を Web Crypto で検証し、よく使う JSON イベントを型付きで公開します。Octokit には**依存しません**。
 
 ## インストール

@@ -1,0 +1,20 @@
+# Hibiki
+
+TypeScript webhooks on Web Standards Request/Response. Core and providers have no runtime dependencies. Register providers with new Hibiki().use(...), handlers with .on(...), and call .handle(request, { provider }). Stripe snapshot events, GitHub JSON deliveries, and Discord Interactions are supported. Hibiki does not provide durable storage, queues, automatic retries, or global deduplication. See https://hibiki-js.github.io/llms.txt for task-specific references.
+
+## References
+
+- [Choosing Hibiki](https://hibiki-js.github.io/guide/choosing-hibiki.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/guide/choosing-hibiki.md
+- [Getting started](https://hibiki-js.github.io/guide/getting-started.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/guide/getting-started.md
+- [Core API and response behavior](https://hibiki-js.github.io/reference/core.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/reference/core.md
+- [Testing and signed requests](https://hibiki-js.github.io/reference/testing.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/reference/testing.md
+- [Stripe snapshot provider](https://hibiki-js.github.io/providers/stripe.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/providers/stripe.md
+- [GitHub JSON provider](https://hibiki-js.github.io/providers/github.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/providers/github.md
+- [Discord Interactions provider](https://hibiki-js.github.io/providers/discord.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/providers/discord.md
+- [Hono integration](https://hibiki-js.github.io/integrations/hono.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/integrations/hono.md
+- [Error handling](https://hibiki-js.github.io/guide/error-handling.html): Markdown source at https://raw.githubusercontent.com/hibiki-js/hibiki/main/docs/guide/error-handling.md
+
+## Machine-readable coverage
+
+- https://hibiki-js.github.io/providers.json contains provider package versions, supported native events, formats and specification sources. Match these versions to installed packages. Main-branch Markdown may differ from an older release.
+- https://github.com/hibiki-js/hibiki/tree/main/skills/hibiki contains the optional usage skill.

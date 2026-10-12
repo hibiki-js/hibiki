@@ -1,5 +1,7 @@
 # `@hibiki-js/stripe`
 
+`stripeEvents`から対応イベント一覧を取得できます。`StripeCheckoutSession`、`StripePaymentIntent`、`StripeCustomer`に主要な業務フィールドの省略可能な型があり、`StripeDeletedCustomer`は展開された削除済みcustomerを表します。snapshot形式への対応と型・バージョンの制約は[プロバイダーガイド](/ja/providers/stripe)を参照してください。
+
 Hibiki 向けの公式 Stripe Webhook プロバイダーです。`Stripe-Signature` を Web Crypto で検証し、よく使うイベントを型付きで公開します。Stripe Node SDK には**依存しません**。
 
 ## インストール

@@ -58,7 +58,43 @@ const webhook = createWebhookTest(app, {
 | --- | --- |
 | `secrets` | プロバイダー名 → 署名シークレット。`emitEvent` で使うプロバイダーごとに必須 |
 
-戻り値は `emit` と `emitEvent` を持つオブジェクトです。
+戻り値は`emit`、`emitEvent`、`emitTypedEvent`、`requestEvent`を持ちます。
+
+### `emitTypedEvent(eventName, payload)`
+
+正常系のテストでは、型付きのpayloadを渡せます。イベント名から型が決まるため、checkoutイベントにinvoiceのデータを渡すと型エラーになります。これはHibikiが定義した型の検査であり、完全な公式スキーマの実行時検証ではありません。省略可能なフィールドは引き続き省略できます。
+
+```ts
+await webhook.emitTypedEvent("stripe.checkout.session.completed", {
+  id: "evt_1",
+  type: "checkout.session.completed",
+  data: { object: {
+    id: "cs_1", object: "checkout.session", payment_status: "paid",
+    amount_total: 1200, metadata: { order_id: "order_1" },
+  } },
+})
+```
+
+Stripeではイベントの封筒を含むpayload、GitHubではactionを含むイベントpayloadを渡します。Stripeの`type`やGitHubの`action`がイベント名と一致しない場合は、実行時にも送信前にエラーになります。署名生成はStripeとGitHubに対応しています。
+
+### `requestEvent(eventName, payload?, options?)`
+
+アプリを呼び出さず、署名付き`Request`を組み立てます。実際の統合ルートに渡したり、本文を意図的に改ざんして署名拒否を試したりできます。
+
+```ts
+const request = await webhook.requestEvent("stripe.invoice.paid", { id: "in_1", object: "invoice" })
+const routed = new Request("https://hibiki.test/webhooks/stripe", request)
+const response = await honoApp.request(routed)
+```
+
+`requestEvent`と`emitEvent`の第3引数は`{ secret?: string, timestamp?: number }`です。異なる秘密鍵を指定すると署名不正を、Stripeに古いUnix時刻を渡すと期限切れを試せます。Stripe以外への`timestamp`指定はエラーです。`emitTypedEvent`は設定済みの通常の秘密鍵を使います。
+
+```ts
+const response = await webhook.emitEvent("stripe.invoice.paid", {}, { secret: "wrong" })
+expect(response.status).toBe(400)
+```
+
+ステータスに加えて目的の副作用も検査してください。対応イベントにハンドラーがなくても204が返ります。このヘルパーが業務処理の実行や永続化を自動で観測することはありません。[統合テスト例](https://github.com/hibiki-js/hibiki/tree/main/examples/hono-webhooks)で確認方法を示しています。
 
 ### `emit(request, provider)`
 
@@ -70,9 +106,11 @@ const response = await webhook.emit(request, "stripe")
 expect(response.status).toBe(400)
 ```
 
-### `emitEvent(eventName, payload?)`
+### `emitEvent(eventName, payload?, options?)`
 
 `stripe.checkout.session.completed` や `github.pull_request.opened` のような Hibiki イベント名向けに**署名付き**リクエストを組み立て、`handle` を呼びます。
+
+既存の使い方との互換性を保つため、`unknown`のpayloadを受け取ります。部分的なデータや意図的に壊したデータのテストにも使えます。正常系のフィールドを型で検査したい場合は`emitTypedEvent`を使ってください。
 
 ```ts
 await webhook.emitEvent("github.push", {

@@ -71,6 +71,8 @@ type ContextFor<R extends Registry, N extends RegisteredEventName<R>> =
       ? E extends keyof EventsOf<R[P]>
         ? HibikiContext<EventsOf<R[P]>[E], P>
         : never : never : never
+/** Parsed payload for one event supported by the registered providers. */
+export type RegisteredEventPayload<R extends Registry, N extends RegisteredEventName<R>> = ContextFor<R, N>["event"]
 type Middleware = (context: HibikiContext, next: () => Promise<void>) => Promise<void> | void
 type Handler = (context: HibikiContext) => Promise<Response | void> | Response | void
 

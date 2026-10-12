@@ -25,5 +25,18 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "description": "Hono integration for Hibiki TypeScript webhooks",
+  "homepage": "https://hibiki-js.github.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hibiki-js/hibiki.git",
+    "directory": "packages/hono"
+  },
+  "keywords": [
+    "webhooks",
+    "typescript",
+    "hibiki",
+    "hono"
+  ]
 }

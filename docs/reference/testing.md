@@ -58,7 +58,43 @@ const webhook = createWebhookTest(app, {
 | --- | --- |
 | `secrets` | Map of provider name → signing secret. Required for `emitEvent` per provider you call |
 
-Returns an object with `emit` and `emitEvent`.
+Returns `emit`, `emitEvent`, `emitTypedEvent` and `requestEvent`.
+
+### `emitTypedEvent(eventName, payload)`
+
+Use a complete typed payload for normal routing tests. The selected event name fixes the payload type; an invoice envelope cannot be passed as a checkout event. This is a compile-time check against Hibiki's curated types, not a full upstream schema validator. Declared optional fields remain optional.
+
+```ts
+await webhook.emitTypedEvent("stripe.checkout.session.completed", {
+  id: "evt_1",
+  type: "checkout.session.completed",
+  data: { object: {
+    id: "cs_1", object: "checkout.session", payment_status: "paid",
+    amount_total: 1200, metadata: { order_id: "order_1" },
+  } },
+})
+```
+
+Stripe requires the event envelope. GitHub requires the event payload, including `action` for action events. Runtime checks also reject mismatched Stripe `type` and GitHub `action` before dispatch. Signed-request generation is built in for Stripe and GitHub only.
+
+### `requestEvent(eventName, payload?, options?)`
+
+Builds a signed `Request` without invoking the app. Pass it through the actual integration route or deliberately modify it to test signature rejection.
+
+```ts
+const request = await webhook.requestEvent("stripe.invoice.paid", { id: "in_1", object: "invoice" })
+const routed = new Request("https://hibiki.test/webhooks/stripe", request)
+const response = await honoApp.request(routed)
+```
+
+Both `requestEvent` and `emitEvent` accept `{ secret?: string, timestamp?: number }` as the third argument. Override the signing secret for wrong-key tests, or pass an old Unix timestamp for Stripe expiry tests. Passing `timestamp` to another provider throws rather than silently ignoring it. `emitTypedEvent` uses the configured normal signing secret.
+
+```ts
+const response = await webhook.emitEvent("stripe.invoice.paid", {}, { secret: "wrong" })
+expect(response.status).toBe(400)
+```
+
+Always assert the intended side effect as well as status. Supported events with no handler also return 204. The harness does not observe business effects or durable completion on your behalf. See the [integration test](https://github.com/hibiki-js/hibiki/tree/main/examples/hono-webhooks).
 
 ### `emit(request, provider)`
 
@@ -70,9 +106,11 @@ const response = await webhook.emit(request, "stripe")
 expect(response.status).toBe(400)
 ```
 
-### `emitEvent(eventName, payload?)`
+### `emitEvent(eventName, payload?, options?)`
 
 Builds a **signed** request for a Hibiki event name such as `stripe.checkout.session.completed` or `github.pull_request.opened`, then calls `handle`.
+
+This compatibility path accepts `unknown`, including partial or deliberately malformed fixtures. Prefer `emitTypedEvent` when you want normal payload fields checked by TypeScript.
 
 ```ts
 await webhook.emitEvent("github.push", {

@@ -1,4 +1,4 @@
-import type { Hibiki, ProviderRegistry, RegisteredEventName } from "@hibiki-js/core"
+import type { Hibiki, ProviderRegistry, RegisteredEventName, RegisteredEventPayload } from "@hibiki-js/core"
 
 const encoder = new TextEncoder()
 const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -23,18 +23,29 @@ export async function githubRequest(payload: unknown, event: string, secret: str
 
 type Secrets<R extends ProviderRegistry> = Partial<Record<keyof R & string, string>>
 
+export interface EventRequestOptions {
+  /** Override the signing secret, for example to test an invalid signature. */
+  secret?: string
+  /** Stripe signing timestamp in seconds, for expiry tests. */
+  timestamp?: number
+}
+
+export interface WebhookTestOptions<R extends ProviderRegistry> {
+  secrets?: Secrets<R>
+}
+
 function splitEventName(eventName: string): { provider: string; nativeEventName: string } {
   const index = eventName.indexOf(".")
   if (index <= 0) throw new Error(`Invalid event name: ${eventName}`)
   return { provider: eventName.slice(0, index), nativeEventName: eventName.slice(index + 1) }
 }
 
-async function requestForEvent(provider: string, nativeEventName: string, payload: unknown, secret: string): Promise<Request> {
+async function requestForEvent(provider: string, nativeEventName: string, payload: unknown, secret: string, timestamp?: number): Promise<Request> {
   if (provider === "stripe") {
     const body = typeof payload === "object" && payload && "type" in payload
       ? payload
       : { id: "evt_test", type: nativeEventName, data: { object: payload } }
-    return stripeRequest(body, secret)
+    return stripeRequest(body, secret, timestamp)
   }
   if (provider === "github") {
     const [event, action] = nativeEventName.split(".", 2)
@@ -47,16 +58,40 @@ async function requestForEvent(provider: string, nativeEventName: string, payloa
 }
 
 /** Small test harness for sending Requests through a Hibiki app. */
-export function createWebhookTest<R extends ProviderRegistry>(app: Hibiki<R>, options: { secrets?: Secrets<R> } = {}) {
+export function createWebhookTest<R extends ProviderRegistry>(app: Hibiki<R>, options: WebhookTestOptions<R> = {}) {
+  async function requestEvent(eventName: RegisteredEventName<R>, payload: unknown = {}, requestOptions: EventRequestOptions = {}) {
+    const { provider, nativeEventName } = splitEventName(eventName)
+    const secret = requestOptions.secret ?? options.secrets?.[provider]
+    if (!secret) throw new Error(`Missing secret for provider: ${provider}`)
+    if (requestOptions.timestamp !== undefined && provider !== "stripe") throw new Error("timestamp is supported only for Stripe requests")
+    return requestForEvent(provider, nativeEventName, payload, secret, requestOptions.timestamp)
+  }
+
+  async function emitEvent(eventName: RegisteredEventName<R>, payload: unknown = {}, requestOptions: EventRequestOptions = {}) {
+    const { provider } = splitEventName(eventName)
+    return app.handle(await requestEvent(eventName, payload, requestOptions), {
+      provider: provider as Parameters<Hibiki<R>["handle"]>[1]["provider"],
+    })
+  }
+
   return {
     emit: (request: Request, provider: Parameters<Hibiki<R>["handle"]>[1]["provider"]) => app.handle(request, { provider }),
-    /** Emit a signed provider event by Hibiki event name, e.g. `stripe.checkout.session.completed`. */
-    async emitEvent(eventName: RegisteredEventName<R>, payload: unknown = {}) {
+    /** Build a signed request for integration tests or deliberate body/header corruption. */
+    requestEvent,
+    /** Untyped payload path retained for partial fixtures and negative tests. */
+    emitEvent,
+    /** Emit a complete, typed provider payload. Stripe requires the full event envelope. */
+    async emitTypedEvent<N extends RegisteredEventName<R>>(eventName: N, payload: RegisteredEventPayload<R, NoInfer<N>>) {
       const { provider, nativeEventName } = splitEventName(eventName)
-      const secret = options.secrets?.[provider]
-      if (!secret) throw new Error(`Missing secret for provider: ${provider}`)
-      const request = await requestForEvent(provider, nativeEventName, payload, secret)
-      return app.handle(request, { provider: provider as Parameters<Hibiki<R>["handle"]>[1]["provider"] })
+      // Catch inconsistencies even when the caller loaded JSON or bypassed TypeScript.
+      if (provider === "stripe" && (!payload || typeof payload !== "object" || !("type" in payload) || payload.type !== nativeEventName)) {
+        throw new Error(`Payload type must match ${nativeEventName}`)
+      }
+      const action = nativeEventName.split(".", 2)[1]
+      if (provider === "github" && action && (!payload || typeof payload !== "object" || !("action" in payload) || payload.action !== action)) {
+        throw new Error(`Payload action must match ${action}`)
+      }
+      return emitEvent(eventName, payload)
     },
   }
 }
