@@ -57,7 +57,7 @@ importers:
         version: link:../core
       hono:
         specifier: ^4.0.0
-        version: 4.13.12
+        version: 4.13.13
 
   packages/stripe:
     dependencies:
@@ -961,9 +961,6 @@ packages:
 
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
-
-  hono@4.13.12:
-    resolution: {integrity: sha512-6E2QDAc9Ick9Sq77ZrGS/dk2WUYni91aufTw6LJKpV7w8kW5/GxVUc650FOADOmlwg3K+f7Pun6XlV+pYmW6gw==}
     engines: {node: '>=16.9.0'}
 
   hono@4.13.13:
@@ -2198,8 +2195,6 @@ snapshots:
   hast-util-whitespace@3.0.0:
     dependencies:
       '@types/hast': 3.0.5
-
-  hono@4.13.12: {}
 
   hono@4.13.13: {}
 
