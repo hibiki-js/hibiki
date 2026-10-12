@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@vitest/coverage-v8": "^4.1.11",
-    "hono": "^4.13.12",
+    "hono": "^4.13.13",
     "tsup": "^8.5.1",
     "typescript": "^5.7.0",
     "vitepress": "1.6.4",
