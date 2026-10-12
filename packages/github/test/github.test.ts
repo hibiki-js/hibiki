@@ -12,7 +12,23 @@ describe("GitHub provider", () => {
     const provider = github({ secret: "secret" })
     for (const name of githubEvents) {
       const [event, action] = name.split(".", 2)
-      const text = JSON.stringify(action ? { action } : {})
+      const resources: Record<string, object> = {
+        pull_request: { pull_request: { number: 1 }, label: { name: "bug" } },
+        pull_request_review: { pull_request: { number: 1 }, review: { id: 1, state: "approved" } },
+        issues: { issue: { number: 1 } },
+        issue_comment: { issue: { number: 1 }, comment: { id: 1 } },
+        release: { release: { tag_name: "v1" } },
+        workflow_run: { workflow_run: { id: 1, conclusion: null } },
+        workflow_job: { workflow_job: { id: 1, conclusion: null } },
+        check_suite: { check_suite: { id: 1, conclusion: null } },
+        check_run: { check_run: { id: 1, conclusion: null } },
+        deployment: { deployment: { id: 1, environment: "test" } },
+        deployment_status: { deployment: { id: 1, environment: "test" }, deployment_status: { id: 1, state: "success" } },
+      }
+      const payload = event === "ping" ? { zen: "test" }
+        : { repository: { full_name: "hibiki/repo" }, ...resources[event!],
+          ...(action ? { action } : { ref: "main", ...(event === "push" ? {} : { ref_type: "branch" }) }) }
+      const text = JSON.stringify(payload)
       const result = await provider.parse({ text, rawBody: new TextEncoder().encode(text), headers: new Headers({ "x-github-event": event! }), request: new Request("https://test") })
       expect(result.kind).toBe("supported")
     }
