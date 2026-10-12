@@ -22,5 +22,17 @@
   "optionalDependencies": {},
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "homepage": "https://hibiki-js.github.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hibiki-js/hibiki.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "webhooks",
+    "typescript",
+    "hibiki",
+    "core"
+  ]
 }

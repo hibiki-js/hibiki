@@ -1,5 +1,7 @@
 # GitHub
 
+`githubEvents` exports the readonly native event/action list for the installed package. GitHub deliveries must be JSON. Common issue/pull-request fields (title, body, state, author and refs) have curated optional types; other fields remain `unknown`. These types do not perform runtime business validation. [Provider coverage](/providers.json) lists the corresponding package version and format.
+
 ```ts
 import { Hibiki } from "@hibiki-js/core"
 import { github } from "@hibiki-js/github"

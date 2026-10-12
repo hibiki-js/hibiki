@@ -1,5 +1,7 @@
 # `@hibiki-js/core`
 
+`RegisteredEventPayload<R, N>`は、登録したプロバイダーの集合`R`とイベント名`N`からpayloadの型を取り出します。`RegisteredEventName<R>`と組み合わせてテストデータにも使えます。
+
 Hibiki の中核パッケージです。不変なアプリビルダー、プロバイダー契約、リクエストの振り分け、安定したエラーコードを担当します。`@hibiki-js/stripe` や `@hibiki-js/github` などのプロバイダーは、この API に接続します。
 
 扱うのは Web Standards の `Request` / `Response` だけです。環境変数の読み取り、ペイロードのログ、キュー、再送は行いません。

@@ -8,11 +8,34 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
-  "engines": { "node": ">=22" },
-  "scripts": { "build": "tsup src/index.ts --format esm --dts" },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts"
+  },
   "dependencies": {},
   "optionalDependencies": {},
-  "peerDependencies": { "@hibiki-js/core": "workspace:^" },
-  "publishConfig": { "access": "public" }
+  "peerDependencies": {
+    "@hibiki-js/core": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Discord Interactions and outgoing webhook messages",
+  "homepage": "https://hibiki-js.github.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hibiki-js/hibiki.git",
+    "directory": "packages/discord"
+  },
+  "keywords": [
+    "webhooks",
+    "typescript",
+    "hibiki",
+    "discord"
+  ]
 }

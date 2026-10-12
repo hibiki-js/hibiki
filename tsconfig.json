@@ -15,7 +15,8 @@
       "@hibiki-js/stripe": ["packages/stripe/src/index.ts"],
       "@hibiki-js/github": ["packages/github/src/index.ts"],
       "@hibiki-js/hono": ["packages/hono/src/index.ts"],
-      "@hibiki-js/testing": ["packages/testing/src/index.ts"]
+      "@hibiki-js/testing": ["packages/testing/src/index.ts"],
+      "@hibiki-js/discord": ["packages/discord/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "examples/**/*.ts"]

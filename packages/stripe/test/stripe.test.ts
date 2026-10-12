@@ -1,9 +1,21 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { createStripeWebhook, stripe } from "../src/index.js"
+import { createStripeWebhook, stripe, stripeEvents } from "../src/index.js"
+import { readFileSync } from "node:fs"
 import { createWebhookTest, stripeRequest } from "@hibiki-js/testing"
 
 describe("Stripe provider", () => {
+  it("keeps typed coverage, exported names and runtime routing in sync", async () => {
+    const coverage = JSON.parse(readFileSync(new URL("../../../docs/public/providers.json", import.meta.url), "utf8"))
+    expect([...stripeEvents].sort()).toEqual(coverage.providers.stripe.events)
+    expect(new Set(stripeEvents).size).toBe(stripeEvents.length)
+    const provider = stripe({ secret: "secret" })
+    for (const type of stripeEvents) {
+      const text = JSON.stringify({ id: "evt", type, data: { object: {} } })
+      const result = await provider.parse({ text, rawBody: new TextEncoder().encode(text), headers: new Headers(), request: new Request("https://test") })
+      expect(result.kind).toBe("supported")
+    }
+  })
   it("sends a Stripe-signed event that the provider can verify", async () => {
     const secret = "whsec_sender"
     const app = new Hibiki().use(stripe({ secret }))

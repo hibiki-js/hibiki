@@ -230,6 +230,7 @@ HTTP responses use `error.code` as the **entire** response body. Do not put secr
 | `ParseResult<TEvents>` / `SupportedParseResult<TEvents>` | Provider parse return types |
 | `ProviderRegistry` | Map of registered providers |
 | `RegisteredEventName<R>` | Union of `"provider.event"` strings for registry `R` |
+| `RegisteredEventPayload<R, N>` | Parsed payload for a selected registered event name |
 | `HibikiOptions` / `HandleOptions<R>` | Constructor / `handle` option types |
 
 ## Related

@@ -6,3 +6,4 @@ coverage/
 .pnpm-store/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+evals/results/
