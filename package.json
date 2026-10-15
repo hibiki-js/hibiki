@@ -21,6 +21,8 @@
     "check:evals": "node --test evals/self-check.mjs evals/source-metrics-check.mjs",
     "eval:agents": "node evals/run.mjs",
     "eval:compare": "node evals/compare.mjs",
+    "bench": "node benchmarks/run.mjs",
+    "bench:size": "node benchmarks/size.mjs",
     "build:runtime": "pnpm --filter @hibiki-js/runtime-tests^... build",
     "typecheck:runtime": "tsc --noEmit -p tests/runtime/tsconfig.json",
     "test:bun": "bun run --no-install --tsconfig-override=tests/runtime/tsconfig.json tests/runtime/run.mjs",
