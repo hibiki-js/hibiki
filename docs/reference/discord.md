@@ -42,7 +42,7 @@ const message = await webhook.send({
 })
 ```
 
-`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). If `components` are present, the client sets `with_components=true` so Discord processes them. Failed HTTP responses throw an error with Discord's message when available.
+`send` waits for Discord to confirm delivery by default and returns the created message. Pass `{ threadId }` to post in a thread, or `{ wait: false }` to request a fire-and-forget response (`undefined`). If `components` are present, the client sets `with_components=true` so Discord processes them. Failed HTTP responses throw `DiscordWebhookError`.
 
 | Export | Description |
 | --- | --- |
@@ -50,9 +50,47 @@ const message = await webhook.send({
 | `DiscordWebhookPayload` | JSON message payload |
 | `DiscordEmbed` | Rich embed payload |
 | `DiscordWebhookMessage` | Message returned by Discord |
-| `DiscordWebhookSendOptions` | Per-send `files`, `threadId`, and `wait` options |
+| `DiscordWebhookSendOptions` | Per-send `files`, `threadId`, `wait`, and `signal` options |
 | `DiscordWebhookFile` | `{ filename: string, data: Blob }` upload |
 | `DiscordWebhookOptions` | Sender options |
+| `DiscordWebhookError` | HTTP error with status, headers, body, and retry delay |
+
+### HTTP errors and cancellation
+
+`DiscordWebhookError` extends `Error` and keeps the existing error message. Its
+`status` is the HTTP status, `headers` is a `Headers` snapshot, and `body` contains
+the parsed JSON value or the original text when the response is not JSON.
+`retryAfterSeconds` uses a valid `Retry-After` header first (seconds or an HTTP
+date), then a non-negative numeric `body.retry_after`. It is `undefined` when
+neither supplies a valid delay. Fractional seconds and zero are preserved.
+The client does not retry automatically.
+
+```ts
+import { createDiscordWebhook, DiscordWebhookError } from "@hibiki-js/discord"
+
+const webhook = createDiscordWebhook(process.env.DISCORD_WEBHOOK_URL!)
+try {
+  const message = await webhook.send({ content: "Deployed" }, {
+    wait: true,
+    signal: AbortSignal.timeout(5_000),
+  })
+  console.log(message.id)
+} catch (error) {
+  if (error instanceof DiscordWebhookError) {
+    console.error(error.status, error.retryAfterSeconds, error.body)
+  }
+  throw error
+}
+```
+
+The signal is passed to fetch for both JSON and file uploads. Network errors,
+abort reasons, and response stream errors propagate unchanged; they are not HTTP
+errors. A custom `fetch` remains supported through `createDiscordWebhook(url, { fetch })`.
+
+Omitting `wait` or passing `wait: true` returns `Promise<DiscordWebhookMessage>`;
+`wait: false` returns `Promise<undefined>`. A dynamic boolean keeps the union.
+An unexpected HTTP 204 with `wait: true` (including the default) rejects instead
+of resolving without a message.
 
 ### File attachments
 

@@ -42,7 +42,7 @@ const message = await webhook.send({
 })
 ```
 
-`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。`components` を含む場合は、Discord が処理できるよう `with_components=true` を設定します。HTTP エラー時は、取得できれば Discord のエラーメッセージを含む例外を投げます。
+`send` はデフォルトで Discord の送信確認を待ち、作成されたメッセージを返します。スレッドへ送る場合は `{ threadId }`、送信確認を待たない場合は `{ wait: false }` を指定します（戻り値は `undefined`）。`components` を含む場合は、Discord が処理できるよう `with_components=true` を設定します。HTTPエラー時は `DiscordWebhookError` を投げます。
 
 | Export | 説明 |
 | --- | --- |
@@ -50,9 +50,38 @@ const message = await webhook.send({
 | `DiscordWebhookPayload` | JSON メッセージの型 |
 | `DiscordEmbed` | リッチEmbedの型 |
 | `DiscordWebhookMessage` | Discord が返すメッセージの型 |
-| `DiscordWebhookSendOptions` | 送信ごとの `files` / `threadId` / `wait` オプション |
+| `DiscordWebhookSendOptions` | 送信ごとの `files` / `threadId` / `wait` / `signal` オプション |
 | `DiscordWebhookFile` | 添付ファイルの型 `{ filename: string, data: Blob }` |
 | `DiscordWebhookOptions` | クライアントのオプション |
+| `DiscordWebhookError` | ステータス、ヘッダー、本文、再試行までの待ち時間を持つHTTPエラー |
+
+### HTTPエラーと送信のキャンセル
+
+`DiscordWebhookError` は `Error` を継承し、従来のエラーメッセージも保持します。
+`status` はHTTPステータス、`headers` は `Headers` のコピーです。`body` にはJSONをパースした値が入り、JSONでなければ元の文字列が入ります。
+`retryAfterSeconds` は、有効な `Retry-After` ヘッダー（秒数またはHTTP日時）を優先し、なければ本文の非負の数値 `retry_after` を使います。どちらにも有効な値がなければ `undefined` です。小数秒と0もそのまま取得できます。クライアントは自動で再試行しません。
+
+```ts
+import { createDiscordWebhook, DiscordWebhookError } from "@hibiki-js/discord"
+
+const webhook = createDiscordWebhook(process.env.DISCORD_WEBHOOK_URL!)
+try {
+  const message = await webhook.send({ content: "デプロイ完了" }, {
+    wait: true,
+    signal: AbortSignal.timeout(5_000),
+  })
+  console.log(message.id)
+} catch (error) {
+  if (error instanceof DiscordWebhookError) {
+    console.error(error.status, error.retryAfterSeconds, error.body)
+  }
+  throw error
+}
+```
+
+`signal` はJSON送信でもファイル添付でも `fetch` に渡します。ネットワークエラー、キャンセルの理由、レスポンス本文の読み取りエラーはそのまま伝播します。これらは `DiscordWebhookError` には変換しません。`createDiscordWebhook(url, { fetch })` による独自の `fetch` の指定も引き続き使えます。
+
+`wait` を省略するか `true` にすると戻り値は `Promise<DiscordWebhookMessage>`、`false` なら `Promise<undefined>` になります。実行時に決まるbooleanでは両方の型が残ります。`wait: true`（デフォルトを含む）で予期しないHTTP 204が返った場合は、メッセージなしで成功する代わりに例外を投げます。
 
 ### ファイルの添付
 

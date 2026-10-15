@@ -80,6 +80,8 @@ export interface DiscordWebhookSendOptions {
   threadId?: string
   /** Wait for Discord to confirm delivery and return the created message. Defaults to true. */
   wait?: boolean
+  /** Cancel the request, for example with AbortSignal.timeout(milliseconds). */
+  signal?: AbortSignal
 }
 
 export interface DiscordWebhookOptions {
@@ -87,8 +89,43 @@ export interface DiscordWebhookOptions {
   fetch?: typeof fetch
 }
 
+/** An unsuccessful HTTP response from Discord's Execute Webhook endpoint. */
+export class DiscordWebhookError extends Error {
+  readonly headers: Headers
+  /** Seconds to wait before retrying, or undefined when Discord supplies no valid delay. */
+  readonly retryAfterSeconds: number | undefined
+
+  constructor(readonly status: number, headers: Headers, readonly body: unknown) {
+    const detail = body && typeof body === "object" && "message" in body && typeof body.message === "string"
+      ? `: ${body.message}` : ""
+    super(`Discord webhook request failed (${status})${detail}`)
+    this.name = "DiscordWebhookError"
+    this.headers = new Headers(headers)
+    this.retryAfterSeconds = retryAfterSeconds(this.headers, body)
+  }
+}
+
+function retryAfterSeconds(headers: Headers, body: unknown): number | undefined {
+  const header = headers.get("retry-after")?.trim()
+  if (header && /^\d+(?:\.\d+)?$/.test(header)) {
+    const seconds = Number(header)
+    if (Number.isFinite(seconds)) return seconds
+  }
+  if (header && /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/i.test(header)) {
+    const date = Date.parse(header)
+    if (Number.isFinite(date)) return Math.max(0, (date - Date.now()) / 1000)
+  }
+  if (body && typeof body === "object" && "retry_after" in body) {
+    const seconds = body.retry_after
+    if (typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0) return seconds
+  }
+  return undefined
+}
+
 /** A small client for sending messages to an incoming Discord webhook. */
 export interface DiscordWebhook {
+  send(payload: DiscordWebhookPayload, options: DiscordWebhookSendOptions & { wait: false }): Promise<undefined>
+  send(payload: DiscordWebhookPayload, options?: DiscordWebhookSendOptions & { wait?: true }): Promise<DiscordWebhookMessage>
   send(payload: DiscordWebhookPayload, options?: DiscordWebhookSendOptions): Promise<DiscordWebhookMessage | undefined>
 }
 
@@ -97,44 +134,47 @@ export function createDiscordWebhook(url: string, options: DiscordWebhookOptions
   const endpoint = new URL(url)
   const fetcher = options.fetch ?? fetch
 
-  return {
-    async send(payload, sendOptions = {}) {
-      const requestUrl = new URL(endpoint)
-      requestUrl.searchParams.set("wait", String(sendOptions.wait ?? true))
-      if (sendOptions.threadId) requestUrl.searchParams.set("thread_id", sendOptions.threadId)
-      if (payload.components) requestUrl.searchParams.set("with_components", "true")
-      else requestUrl.searchParams.delete("with_components")
+  function send(payload: DiscordWebhookPayload, sendOptions: DiscordWebhookSendOptions & { wait: false }): Promise<undefined>
+  function send(payload: DiscordWebhookPayload, sendOptions?: DiscordWebhookSendOptions & { wait?: true }): Promise<DiscordWebhookMessage>
+  function send(payload: DiscordWebhookPayload, sendOptions?: DiscordWebhookSendOptions): Promise<DiscordWebhookMessage | undefined>
+  async function send(payload: DiscordWebhookPayload, sendOptions: DiscordWebhookSendOptions = {}): Promise<DiscordWebhookMessage | undefined> {
+    const requestUrl = new URL(endpoint)
+    requestUrl.searchParams.set("wait", String(sendOptions.wait ?? true))
+    if (sendOptions.threadId) requestUrl.searchParams.set("thread_id", sendOptions.threadId)
+    if (payload.components) requestUrl.searchParams.set("with_components", "true")
+    else requestUrl.searchParams.delete("with_components")
 
-      let body: string | FormData = JSON.stringify(payload)
-      if (sendOptions.files?.length) {
-        const form = new FormData()
-        form.append("payload_json", body)
-        sendOptions.files.forEach((file, index) => {
-          form.append(`files[${index}]`, file.data, file.filename)
-        })
-        body = form
-      }
-
-      const response = await fetcher(requestUrl, {
-        method: "POST",
-        redirect: "error",
-        ...(typeof body === "string" ? { headers: { "content-type": "application/json" } } : {}),
-        body,
+    let body: string | FormData = JSON.stringify(payload)
+    if (sendOptions.files?.length) {
+      const form = new FormData()
+      form.append("payload_json", body)
+      sendOptions.files.forEach((file, index) => {
+        form.append(`files[${index}]`, file.data, file.filename)
       })
+      body = form
+    }
 
-      if (!response.ok) {
-        let detail = ""
-        try {
-          const error: unknown = await response.json()
-          if (error && typeof error === "object" && "message" in error && typeof error.message === "string") detail = `: ${error.message}`
-        } catch { /* The response may not contain JSON. */ }
-        throw new Error(`Discord webhook request failed (${response.status})${detail}`)
-      }
+    const response = await fetcher(requestUrl, {
+      method: "POST",
+      redirect: "error",
+      ...(sendOptions.signal ? { signal: sendOptions.signal } : {}),
+      ...(typeof body === "string" ? { headers: { "content-type": "application/json" } } : {}),
+      body,
+    })
 
-      if (response.status === 204) return undefined
-      return await response.json() as DiscordWebhookMessage
-    },
+    if (!response.ok) {
+      // Read outside the JSON parse catch so aborts and stream errors propagate.
+      const text = await response.text()
+      let body: unknown = text
+      try { body = JSON.parse(text) } catch { /* Keep non-JSON response text. */ }
+      throw new DiscordWebhookError(response.status, response.headers, body)
+    }
+
+    if (sendOptions.wait === false) return undefined
+    if (response.status === 204) throw new Error("Discord webhook returned no message with wait=true")
+    return await response.json() as DiscordWebhookMessage
   }
+  return { send }
 }
 
 const encoder = new TextEncoder()
