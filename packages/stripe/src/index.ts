@@ -220,15 +220,19 @@ export function stripe(options: StripeOptions): HibikiProvider<"stripe", StripeE
       }
       if (!timestamp || !/^\d+$/.test(timestamp)) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Invalid Stripe signature", 400)
       if (Math.abs(Date.now() / 1000 - Number(timestamp)) > tolerance) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Expired Stripe signature", 400)
-      const prefix = encoder.encode(`${timestamp}.`)
-      const signed = new Uint8Array(prefix.length + rawBody.length)
-      signed.set(prefix)
-      signed.set(rawBody, prefix.length)
+      let signed: Uint8Array | undefined
       const cryptoKey = await keyPromise
       let valid = false
       for (const signature of signatures) {
         const bytes = fromHex(signature)
-        if (bytes && await crypto.subtle.verify("HMAC", cryptoKey, bytes as BufferSource, signed as BufferSource)) {
+        if (!bytes) continue
+        if (!signed) {
+          const prefix = encoder.encode(`${timestamp}.`)
+          signed = new Uint8Array(prefix.length + rawBody.length)
+          signed.set(prefix)
+          signed.set(rawBody, prefix.length)
+        }
+        if (await crypto.subtle.verify("HMAC", cryptoKey, bytes as BufferSource, signed as BufferSource)) {
           valid = true
           break
         }

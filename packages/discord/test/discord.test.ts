@@ -361,3 +361,20 @@ describe("Discord retry protection", () => {
     expect((await app.handle(await request({ type: 2 }, keys.privateKey), { provider: "discord" })).status).toBe(400)
   })
 })
+
+describe("Discord signature length", () => {
+  it.each([0, 2, 126, 127, 129, 130, 8192])("rejects a %i-character signature without dispatch", async length => {
+    const keys = await keyPair()
+    const app = new Hibiki().use(discord({ publicKey: keys.publicKey }))
+    let calls = 0
+    app.on("discord.application_command", () => { calls++ })
+    const response = await app.handle(new Request("https://test", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-signature-timestamp": String(Math.floor(Date.now() / 1000)), "x-signature-ed25519": "0".repeat(length) },
+      body: "{}",
+    }), { provider: "discord" })
+    expect(response.status).toBe(401)
+    expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
+    expect(calls).toBe(0)
+  })
+})
