@@ -111,31 +111,6 @@ const coreProvider = defineProvider<"example", { ping: { value: string } }>({
 type Case = { name: string; run: () => Promise<void> }
 const cases: Case[] = [
   {
-    name: "Discord sender: isolates cached defaults from fetch mutations and overrides",
-    async run() {
-      const urls: string[] = []
-      const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=original&with_components=false&wait=false", {
-        fetch: async input => {
-          equal(input instanceof URL, true, "Fresh URL passed to fetch")
-          const url = input as URL
-          const wait = url.searchParams.get("wait") === "true"
-          urls.push(url.href)
-          url.searchParams.set("thread_id", "mutated")
-          return wait ? Response.json({ id: "message", channel_id: "channel" }) : new Response(null, { status: 204 })
-        },
-      })
-      equal((await webhook.send({ content: "first" })).id, "message", "Default message")
-      equal(await webhook.send({}, { wait: false }), undefined, "Non-waited result")
-      await webhook.send({ components: [] }, { threadId: "override" })
-      await webhook.send({ content: "again" })
-      const base = "https://discord.com/api/webhooks/123/token?"
-      equal(urls[0], `${base}thread_id=original&wait=true`, "Default URL")
-      equal(urls[1], `${base}thread_id=original&wait=false`, "Per-send wait")
-      equal(urls[2], `${base}thread_id=override&with_components=true&wait=true`, "Per-send components and thread")
-      equal(urls[3], urls[0], "Original defaults retained")
-    },
-  },
-  {
     name: "GitHub: large signed payload keeps its authenticated ID and deduplicates",
     async run() {
       const payload = { ...githubPayload, padding: "x".repeat(70_000) }
@@ -165,6 +140,31 @@ const cases: Case[] = [
       const response = await app.handle(await githubRequest({ ...githubPayload, padding: "x".repeat(70_000) }, "unknown", secret), { provider: "github" })
       equal(response.status, 200, "Unsupported large payload response")
       equal(calls, 0, "Unsupported large payload handler calls")
+    },
+  },
+  {
+    name: "Discord sender: isolates cached defaults from fetch mutations and overrides",
+    async run() {
+      const urls: string[] = []
+      const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=original&with_components=false&wait=false", {
+        fetch: async input => {
+          equal(input instanceof URL, true, "Fresh URL passed to fetch")
+          const url = input as URL
+          const wait = url.searchParams.get("wait") === "true"
+          urls.push(url.href)
+          url.searchParams.set("thread_id", "mutated")
+          return wait ? Response.json({ id: "message", channel_id: "channel" }) : new Response(null, { status: 204 })
+        },
+      })
+      equal((await webhook.send({ content: "first" })).id, "message", "Default message")
+      equal(await webhook.send({}, { wait: false }), undefined, "Non-waited result")
+      await webhook.send({ components: [] }, { threadId: "override" })
+      await webhook.send({ content: "again" })
+      const base = "https://discord.com/api/webhooks/123/token?"
+      equal(urls[0], `${base}thread_id=original&wait=true`, "Default URL")
+      equal(urls[1], `${base}thread_id=original&wait=false`, "Per-send wait")
+      equal(urls[2], `${base}thread_id=override&with_components=true&wait=true`, "Per-send components and thread")
+      equal(urls[3], urls[0], "Original defaults retained")
     },
   },
   {
