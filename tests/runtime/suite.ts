@@ -1,7 +1,7 @@
 import { defineProvider, Hibiki } from "@hibiki-js/core"
 import { stripe } from "@hibiki-js/stripe"
 import { github } from "@hibiki-js/github"
-import { createDiscordWebhook, discord } from "@hibiki-js/discord"
+import { discord } from "@hibiki-js/discord"
 import { stripeRequest, githubRequest } from "@hibiki-js/testing"
 
 /** Fail the current compatibility case when values differ. */
@@ -145,6 +145,7 @@ const cases: Case[] = [
   {
     name: "Discord sender: isolates cached defaults from fetch mutations and overrides",
     async run() {
+      const { createDiscordWebhook } = await import("@hibiki-js/discord")
       const urls: string[] = []
       const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=original&with_components=false&wait=false", {
         fetch: async input => {
