@@ -1,7 +1,12 @@
 import type { Hibiki, ProviderRegistry, RegisteredEventName, RegisteredEventPayload } from "@hibiki-js/core"
 
 const encoder = new TextEncoder()
-const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+function hex(bytes: Uint8Array): string {
+  const digits = "0123456789abcdef"
+  let result = ""
+  for (const byte of bytes) result += digits[byte >> 4]! + digits[byte & 15]!
+  return result
+}
 
 async function hmac(secret: string, body: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])

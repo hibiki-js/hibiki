@@ -111,6 +111,18 @@ const coreProvider = defineProvider<"example", { ping: { value: string } }>({
 type Case = { name: string; run: () => Promise<void> }
 const cases: Case[] = [
   {
+    name: "Testing: preserves fixed Unicode HMAC-SHA256 signatures",
+    async run() {
+      const payload = { text: "日本語😀\u0000" }
+      const github = await githubRequest(payload, "push", "secret")
+      const stripe = await stripeRequest(payload, "secret", 1_700_000_000)
+      equal(github.headers.get("x-hub-signature-256"), "sha256=3d6e6ff787c38649699566d1e1d628175f2fa26103388b56993bd458c6cc13ec", "GitHub signature vector")
+      equal(stripe.headers.get("stripe-signature"), "t=1700000000,v1=fd8eaf849ee516f29584a82f083d24e7ca180aec03774237dcfa45da64eb1b4d", "Stripe signature vector")
+      equal(await github.text(), JSON.stringify(payload), "GitHub Unicode body")
+      equal(await stripe.text(), JSON.stringify(payload), "Stripe Unicode body")
+    },
+  },
+  {
     name: "GitHub: large signed payload keeps its authenticated ID and deduplicates",
     async run() {
       const payload = { ...githubPayload, padding: "x".repeat(70_000) }

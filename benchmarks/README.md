@@ -78,3 +78,22 @@ pnpm bench:size
 Use a small iteration count to validate the harness, not to draw performance
 conclusions. Full measurements are intentionally opt-in and do not lengthen the
 existing pull-request CI.
+
+## Hex encoding in complete operations
+
+Build the current checkout and a separate baseline checkout, then run:
+
+```sh
+node benchmarks/encoding.mjs --baseline /path/to/baseline --output benchmarks/results/encoding.json
+```
+
+Each case alternates baseline and current built packages, with 500 warmup and
+1,000 measured operations per version. It measures Testing Request generation,
+Stripe/GitHub senders with a local fetch replacement, sender-to-Core delivery,
+and GitHub parsing and complete receiving at 1 and 100 KiB. A Unicode 100 KiB
+Testing-to-Core case also covers UTF-8 bodies. Request generation includes
+serialization and signing; receiver-only timing excludes request signing and
+construction. Both versions use the current checkout's Core dispatcher.
+Response codes, handler counts, signatures, bodies and parsed IDs are checked.
+No external HTTP requests are made. Reports include p50/p95/mean microseconds
+and hashes of the compared built packages. Run three times on an idle machine.

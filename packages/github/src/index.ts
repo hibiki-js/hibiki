@@ -89,7 +89,7 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
     async send<TEvent extends keyof GitHubEvents>(eventName: TEvent, payload: GitHubEvents[TEvent]): Promise<Response> {
       const body = JSON.stringify(payload)
       const key = await keyPromise
-      const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(body) as BufferSource)), byte => byte.toString(16).padStart(2, "0")).join("")
+      const signature = hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(body) as BufferSource)))
       const nativeEventName = String(eventName).split(".", 1)[0]!
 
       let response: Response
@@ -114,6 +114,13 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
 }
 
 const encoder = /* @__PURE__ */ new TextEncoder()
+
+function hex(bytes: Uint8Array): string {
+  const digits = "0123456789abcdef"
+  let result = ""
+  for (const byte of bytes) result += digits[byte >> 4]! + digits[byte & 15]!
+  return result
+}
 
 /** Decode exactly one SHA-256 digest; reject malformed signature encodings. */
 function fromHex(value: string): Uint8Array | undefined {
@@ -226,7 +233,7 @@ export function github(options: GitHubOptions): HibikiProvider<"github", GitHubE
         }
         // GitHub delivery/event headers are unsigned. Bind deduplication to authenticated bytes.
         const digest = await (digestPromise ?? crypto.subtle.digest("SHA-256", rawBody as BufferSource))
-        const id = `body:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`
+        const id = `body:${hex(new Uint8Array(digest))}`
         return { kind: "supported", eventName, event: payload, id } as SupportedParseResult<GitHubEvents>
       } finally {
         // A rejected or unsupported payload may not await speculative hashing.
