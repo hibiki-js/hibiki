@@ -29,7 +29,7 @@ export function createMemoryIdempotencyStore(options: MemoryIdempotencyOptions =
   if (!Number.isFinite(retentionMs) || retentionMs <= 0) throw new TypeError("retentionMs must be a positive finite number")
   if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) throw new TypeError("maxEntries must be a positive safe integer")
   type Completed = {
-    token: string
+    token?: undefined
     key: string
     expiresAt: number
     previous: Completed | undefined
@@ -68,8 +68,9 @@ export function createMemoryIdempotencyStore(options: MemoryIdempotencyOptions =
     },
     async complete(key, token) {
       const entry = entries.get(key)
-      if (entry?.token !== token || entry.expiresAt !== undefined) return
-      const completed: Completed = { token, key, expiresAt: Date.now() + retentionMs, previous: tail, next: undefined }
+      if (!entry || entry.expiresAt !== undefined || entry.token !== token) return
+      // Ownership is only needed while pending; completed IDs retain replay protection without it.
+      const completed: Completed = { key, expiresAt: Date.now() + retentionMs, previous: tail, next: undefined }
       if (tail) tail.next = completed
       else head = completed
       tail = completed
@@ -77,7 +78,7 @@ export function createMemoryIdempotencyStore(options: MemoryIdempotencyOptions =
     },
     async release(key, token) {
       const entry = entries.get(key)
-      if (entry?.token === token && entry.expiresAt === undefined) entries.delete(key)
+      if (entry && entry.expiresAt === undefined && entry.token === token) entries.delete(key)
     },
   }
 }
