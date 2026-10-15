@@ -4,6 +4,7 @@ import { github } from "@hibiki-js/github"
 import { discord } from "@hibiki-js/discord"
 import { stripeRequest, githubRequest } from "@hibiki-js/testing"
 
+/** Fail the current compatibility case when values differ. */
 function equal(actual: unknown, expected: unknown, message: string): void {
   if (!Object.is(actual, expected)) throw new Error(`${message}: expected ${String(expected)}, received ${String(actual)}`)
 }
@@ -202,6 +203,7 @@ for (const provider of providers) {
   }
 }
 
+/** Execute every shared case in the current runtime and report completed cases. */
 export async function runSuite() {
   if (cases.length === 0) throw new Error("No runtime compatibility cases registered")
   const names: string[] = []
