@@ -1,6 +1,6 @@
-import { describe, expect, expectTypeOf, it } from "vitest"
+import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { createDiscordWebhook, discord } from "../src/index.js"
+import { createDiscordWebhook, discord, DiscordWebhookError, type DiscordWebhookMessage, type DiscordWebhookSendOptions } from "../src/index.js"
 
 const encoder = new TextEncoder()
 const hex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("")
@@ -105,7 +105,7 @@ describe("Discord provider", () => {
       fetch: async (_, init) => {
         expect(new Headers(init?.headers).get("content-type")).toBe("application/json")
         expect(init?.body).toBe('{"content":"hello"}')
-        return new Response(null, { status: 204 })
+        return Response.json({ id: "456", channel_id: "789" })
       },
     })
     await webhook.send({ content: "hello" }, { files: [] })
@@ -136,6 +136,145 @@ describe("Discord provider", () => {
       fetch: async () => new Response("unavailable", { status: 502 }),
     })
     await expect(textError.send({ content: "hello" })).rejects.toThrow("Discord webhook request failed (502)")
+  })
+
+  it.each([400, 429, 503])("exposes structured HTTP error information for %i", async status => {
+    const body = { message: "Request failed", code: 123, retry_after: 1.25 }
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => Response.json(body, { status, headers: { "x-request-id": "request-1", "retry-after": "2.5" } }),
+    })
+    const error = await webhook.send({}).catch(error => error as unknown)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toBeInstanceOf(DiscordWebhookError)
+    if (!(error instanceof DiscordWebhookError)) throw new Error("Expected DiscordWebhookError")
+    expect(error.name).toBe("DiscordWebhookError")
+    expect(error.status).toBe(status)
+    expect(error.headers.get("x-request-id")).toBe("request-1")
+    expect(error.body).toEqual(body)
+    expect(error.retryAfterSeconds).toBe(2.5)
+    expect(error.message).toBe(`Discord webhook request failed (${status}): Request failed`)
+  })
+
+  it.each(["unavailable", "{invalid JSON", "", "null", "42"])("preserves HTTP error bodies: %j", async text => {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => new Response(text, { status: 502 }),
+    })
+    const error = await webhook.send({}).catch(error => error as unknown)
+    expect(error).toBeInstanceOf(DiscordWebhookError)
+    if (!(error instanceof DiscordWebhookError)) throw new Error("Expected DiscordWebhookError")
+    expect(error.body).toEqual(text === "null" ? null : text === "42" ? 42 : text)
+    expect(error.retryAfterSeconds).toBeUndefined()
+  })
+
+  it.each([
+    [undefined, 1.25, 1.25], ["0", 3, 0], [" 2.5 ", 3, 2.5],
+    ["invalid", 3, 3], ["-1", 3, 3], ["Infinity", 3, 3], ["", 3, 3],
+    [undefined, -1, undefined], [undefined, "2", undefined], [undefined, null, undefined],
+  ])("reads retry delay from header %j and body %j", async (header, retryAfter, expected) => {
+    const error = new DiscordWebhookError(429, new Headers(header === undefined ? {} : { "retry-after": header }), { retry_after: retryAfter })
+    expect(error.retryAfterSeconds).toBe(expected)
+  })
+
+  it("supports HTTP-date retry headers and rejects invalid retry delays", () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2030, 0, 1))
+    try {
+      const headers = new Headers({ "retry-after": "Tue, 01 Jan 2030 00:01:00 GMT" })
+      const error = new DiscordWebhookError(503, headers, {})
+      expect(error.retryAfterSeconds).toBe(60)
+      headers.set("retry-after", "100")
+      expect(error.headers.get("retry-after")).toBe("Tue, 01 Jan 2030 00:01:00 GMT")
+      expect(new DiscordWebhookError(429, new Headers({ "retry-after": "Wed, 01 Jan 2020 00:00:00 GMT" }), {}).retryAfterSeconds).toBe(0)
+      for (const header of ["Wed, invalid", "9".repeat(400)]) {
+        expect(new DiscordWebhookError(429, new Headers({ "retry-after": header }), { retry_after: 4 }).retryAfterSeconds).toBe(4)
+      }
+      for (const invalid of [Infinity, NaN, -Infinity]) {
+        expect(new DiscordWebhookError(429, new Headers(), { retry_after: invalid }).retryAfterSeconds).toBeUndefined()
+      }
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it.each([false, true])("forwards cancellation for multipart=%j", async multipart => {
+    const controller = new AbortController()
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async (_, init) => {
+        expect(init?.signal).toBe(controller.signal)
+        expect(init?.body instanceof FormData).toBe(multipart)
+        init?.signal?.throwIfAborted()
+        return Response.json({ id: "456", channel_id: "789" })
+      },
+    })
+    const options = { signal: controller.signal, ...(multipart ? { files: [{ filename: "test.txt", data: new Blob(["test"]) }] } : {}) }
+    await expect(webhook.send({}, options)).resolves.toMatchObject({ id: "456" })
+    const reason = new DOMException("Cancelled", "AbortError")
+    controller.abort(reason)
+    await expect(webhook.send({}, options)).rejects.toBe(reason)
+  })
+
+  it("preserves in-flight aborts, network errors and response stream errors", async () => {
+    const controller = new AbortController()
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: (_, init) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true })
+      }),
+    })
+    const pending = webhook.send({}, { signal: controller.signal })
+    controller.abort()
+    await expect(pending).rejects.toBe(controller.signal.reason)
+
+    const networkError = new TypeError("Connection failed")
+    const unavailable = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => { throw networkError },
+    })
+    await expect(unavailable.send({})).rejects.toBe(networkError)
+
+    const streamError = new DOMException("Body read cancelled", "AbortError")
+    const brokenBody = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => new Response(new ReadableStream({ start(controller) { controller.error(streamError) } }), { status: 429 }),
+    })
+    await expect(brokenBody.send({})).rejects.toBe(streamError)
+  })
+
+  it("narrows return types for wait, including the default and dynamic options", async () => {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => Response.json({ id: "456", channel_id: "789" }),
+    })
+    const defaultMessage = webhook.send({})
+    const waited = webhook.send({}, { wait: true })
+    const notWaited = webhook.send({}, { wait: false })
+    const options: DiscordWebhookSendOptions = { wait: Boolean(Date.now()) }
+    const dynamic = webhook.send({}, options)
+    expectTypeOf(defaultMessage).toEqualTypeOf<Promise<DiscordWebhookMessage>>()
+    expectTypeOf(waited).toEqualTypeOf<Promise<DiscordWebhookMessage>>()
+    expectTypeOf(notWaited).toEqualTypeOf<Promise<undefined>>()
+    expectTypeOf(dynamic).toEqualTypeOf<Promise<DiscordWebhookMessage | undefined>>()
+    expect(await defaultMessage).toMatchObject({ id: "456" })
+    expect(await waited).toMatchObject({ id: "456" })
+    expect(await notWaited).toBeUndefined()
+    await dynamic
+  })
+
+  it.each([true, false])("keeps the sent wait=%j when options change during fetch", async wait => {
+    const options: DiscordWebhookSendOptions = { wait }
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async input => {
+        expect(new URL(input.toString()).searchParams.get("wait")).toBe(String(wait))
+        // A reused options object may be changed while a request is pending.
+        await Promise.resolve()
+        options.wait = !wait
+        return wait ? Response.json({ id: "456", channel_id: "789" }) : new Response(null, { status: 204 })
+      },
+    })
+    expect(await webhook.send({}, options)).toEqual(wait ? { id: "456", channel_id: "789" } : undefined)
+  })
+
+  it("rejects an unexpected empty response when waiting for a message", async () => {
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async () => new Response(null, { status: 204 }),
+    })
+    await expect(webhook.send({})).rejects.toThrow("Discord webhook returned no message with wait=true")
+    await expect(webhook.send({}, { wait: true })).rejects.toThrow("Discord webhook returned no message with wait=true")
   })
 
   it("verifies and routes interaction types", async () => {
