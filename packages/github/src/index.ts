@@ -204,26 +204,35 @@ export function github(options: GitHubOptions): HibikiProvider<"github", GitHubE
       }
     },
     async parse({ rawBody, text, headers }): Promise<ParseResult<GitHubEvents>> {
-      const payload: unknown = JSON.parse(text)
-      if (!isRecord(payload)) throw new Error("Invalid JSON")
-      const event = headers.get("x-github-event")
-      const action = payload.action
-      let eventName: keyof GitHubEvents | undefined
-      if (event === "push" || event === "ping" || event === "create" || event === "delete") eventName = event
-      else if (typeof action === "string") {
-        const candidate = `${event}.${action}` as keyof GitHubEvents
-        if (ACTION_EVENTS.includes(candidate)) eventName = candidate
+      // Only large bodies provide enough parsing work to benefit from speculative hashing.
+      const digestPromise = rawBody.byteLength >= 65_536
+        ? crypto.subtle.digest("SHA-256", rawBody as BufferSource) : undefined
+      try {
+        const payload: unknown = JSON.parse(text)
+        if (!isRecord(payload)) throw new Error("Invalid JSON")
+        const event = headers.get("x-github-event")
+        const action = payload.action
+        let eventName: keyof GitHubEvents | undefined
+        if (event === "push" || event === "ping" || event === "create" || event === "delete") eventName = event
+        else if (typeof action === "string") {
+          const candidate = `${event}.${action}` as keyof GitHubEvents
+          if (ACTION_EVENTS.includes(candidate)) eventName = candidate
+        }
+        if (!eventName) return { kind: "unsupported", nativeEventName: event ?? undefined }
+        if (allowedEvents && !allowedEvents.has(eventName)) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub event is not allowed", 400)
+        validatePayload(eventName, payload)
+        if (allowedRepositories && (!isRecord(payload.repository) || !allowedRepositories.has(String(payload.repository.full_name)))) {
+          throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub repository is not allowed", 400)
+        }
+        // GitHub delivery/event headers are unsigned. Bind deduplication to authenticated bytes.
+        const digest = await (digestPromise ?? crypto.subtle.digest("SHA-256", rawBody as BufferSource))
+        const id = `body:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`
+        return { kind: "supported", eventName, event: payload, id } as SupportedParseResult<GitHubEvents>
+      } finally {
+        // A rejected or unsupported payload may not await speculative hashing.
+        // Preserve its parse result/error while settling any started operation.
+        if (digestPromise) await Promise.allSettled([digestPromise])
       }
-      if (!eventName) return { kind: "unsupported", nativeEventName: event ?? undefined }
-      if (allowedEvents && !allowedEvents.has(eventName)) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub event is not allowed", 400)
-      validatePayload(eventName, payload)
-      if (allowedRepositories && (!isRecord(payload.repository) || !allowedRepositories.has(String(payload.repository.full_name)))) {
-        throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub repository is not allowed", 400)
-      }
-      // GitHub delivery/event headers are unsigned. Bind deduplication to authenticated bytes.
-      const digest = await crypto.subtle.digest("SHA-256", rawBody as BufferSource)
-      const id = `body:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`
-      return { kind: "supported", eventName, event: payload, id } as SupportedParseResult<GitHubEvents>
     },
   })
 }
