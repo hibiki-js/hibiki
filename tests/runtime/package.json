@@ -1,0 +1,12 @@
+{
+  "name": "@hibiki-js/runtime-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@hibiki-js/core": "workspace:*",
+    "@hibiki-js/stripe": "workspace:*",
+    "@hibiki-js/github": "workspace:*",
+    "@hibiki-js/discord": "workspace:*",
+    "@hibiki-js/testing": "workspace:*"
+  }
+}
