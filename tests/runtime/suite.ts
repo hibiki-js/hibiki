@@ -111,61 +111,6 @@ const coreProvider = defineProvider<"example", { ping: { value: string } }>({
 type Case = { name: string; run: () => Promise<void> }
 const cases: Case[] = [
   {
-    name: "Core: missing providers return independent errors without consuming Requests",
-    async run() {
-      const app = new Hibiki().use(coreProvider)
-      let previous: Response | undefined
-      for (let i = 0; i < 2; i++) {
-        const request = new Request(url, { method: "POST", body: "untouched" })
-        const response = await app.handle(request, { provider: "missing" as never })
-        equal(response.status, 500, "Missing provider status")
-        equal(await response.text(), "HIBIKI_PROVIDER_NOT_REGISTERED", "Missing provider code")
-        equal(await request.text(), "untouched", "Unconsumed original Request")
-        equal(Object.is(previous, response), false, "Independent error Responses")
-        previous = response
-      }
-    },
-  },
-  {
-    name: "Core: pending signed deliveries do not execute or release another claim",
-    async run() {
-      const store = createMemoryIdempotencyStore()
-      const key = JSON.stringify(["stripe", stripePayload.id])
-      const claim = await store.claim(key)
-      equal(claim.status, "acquired", "Original ownership")
-      let calls = 0
-      const app = new Hibiki({ idempotencyStore: store }).use(stripe({ secret }))
-      app.on("stripe.invoice.paid", () => { calls++ })
-      const response = await app.handle(await stripeRequest(stripePayload, secret), { provider: "stripe" })
-      equal(response.status, 503, "Pending status")
-      equal(await response.text(), "HIBIKI_EVENT_IN_PROGRESS", "Pending code")
-      equal((await store.claim(key)).status, "pending", "Original claim is preserved")
-      equal(calls, 0, "Pending handler calls")
-    },
-  },
-  {
-    name: "Core: completion failures preserve successful effects and pending claims",
-    async run() {
-      const memory = createMemoryIdempotencyStore()
-      let calls = 0
-      let releases = 0
-      const app = new Hibiki({ idempotencyStore: {
-        claim: memory.claim,
-        async complete() { throw new Error("Unavailable storage") },
-        async release(key, token) { releases++; await memory.release(key, token) },
-      } }).use(stripe({ secret }))
-      app.on("stripe.invoice.paid", () => { calls++ })
-      const response = await app.handle(await stripeRequest(stripePayload, secret), { provider: "stripe" })
-      equal(response.status, 503, "Completion failure status")
-      equal(await response.text(), "HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Completion failure code")
-      const retry = await app.handle(await stripeRequest(stripePayload, secret), { provider: "stripe" })
-      equal(retry.status, 503, "Retry status")
-      equal(await retry.text(), "HIBIKI_EVENT_IN_PROGRESS", "Retry code")
-      equal(calls, 1, "Successful effects are not repeated")
-      equal(releases, 0, "Successful claim is not released")
-    },
-  },
-  {
     name: "GitHub: large signed payload keeps its authenticated ID and deduplicates",
     async run() {
       const payload = { ...githubPayload, padding: "x".repeat(70_000) }
@@ -218,6 +163,61 @@ const cases: Case[] = [
       equal(response.status, 201, "Custom status")
       equal(await response.text(), "handled", "Custom response body")
       equal(calls, 1, "Handler calls")
+    },
+  },
+  {
+    name: "Core: missing providers return independent errors without consuming Requests",
+    async run() {
+      const app = new Hibiki().use(coreProvider)
+      let previous: Response | undefined
+      for (let i = 0; i < 2; i++) {
+        const request = new Request(url, { method: "POST", body: "untouched" })
+        const response = await app.handle(request, { provider: "missing" as never })
+        equal(response.status, 500, "Missing provider status")
+        equal(await response.text(), "HIBIKI_PROVIDER_NOT_REGISTERED", "Missing provider code")
+        equal(await request.text(), "untouched", "Unconsumed original Request")
+        equal(Object.is(previous, response), false, "Independent error Responses")
+        previous = response
+      }
+    },
+  },
+  {
+    name: "Core: pending signed deliveries do not execute or release another claim",
+    async run() {
+      const store = createMemoryIdempotencyStore()
+      const key = JSON.stringify(["stripe", stripePayload.id])
+      const claim = await store.claim(key)
+      equal(claim.status, "acquired", "Original ownership")
+      let calls = 0
+      const app = new Hibiki({ idempotencyStore: store }).use(stripe({ secret }))
+      app.on("stripe.invoice.paid", () => { calls++ })
+      const response = await app.handle(await stripeRequest(stripePayload, secret), { provider: "stripe" })
+      equal(response.status, 503, "Pending status")
+      equal(await response.text(), "HIBIKI_EVENT_IN_PROGRESS", "Pending code")
+      equal((await store.claim(key)).status, "pending", "Original claim is preserved")
+      equal(calls, 0, "Pending handler calls")
+    },
+  },
+  {
+    name: "Core: completion failures preserve successful effects and pending claims",
+    async run() {
+      const memory = createMemoryIdempotencyStore()
+      let calls = 0
+      let releases = 0
+      const app = new Hibiki({ idempotencyStore: {
+        claim: memory.claim,
+        async complete() { throw new Error("Unavailable storage") },
+        async release(key, token) { releases++; await memory.release(key, token) },
+      } }).use(stripe({ secret }))
+      app.on("stripe.invoice.paid", () => { calls++ })
+      const response = await app.handle(await stripeRequest(stripePayload, secret), { provider: "stripe" })
+      equal(response.status, 503, "Completion failure status")
+      equal(await response.text(), "HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Completion failure code")
+      const retry = await app.handle(await stripeRequest(stripePayload, secret), { provider: "stripe" })
+      equal(retry.status, 503, "Retry status")
+      equal(await retry.text(), "HIBIKI_EVENT_IN_PROGRESS", "Retry code")
+      equal(calls, 1, "Successful effects are not repeated")
+      equal(releases, 0, "Successful claim is not released")
     },
   },
   {
