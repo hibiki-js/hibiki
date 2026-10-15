@@ -55,6 +55,23 @@ performance from Node.js results. Add targeted cases when investigating those
 behaviors. Timing results have no CI pass/fail threshold because shared-runner
 noise can exceed small optimizations.
 
+## Idempotency expiry bursts
+
+Build the current checkout and a separate baseline checkout, then run:
+
+```sh
+node benchmarks/idempotency.mjs --baseline /path/to/baseline --output benchmarks/results/idempotency.json
+```
+
+The benchmark alternates versions for 30 independent expiry bursts at 0, 1,000
+and 10,000 completed IDs. Setup is outside timing; an explicit clock advance
+makes all completed IDs expire together. It reports the first claim and the
+entire cleanup window, including the same subsequent claims for both versions.
+Steady new/released, pending and completed claims use 100 batches of 1,000
+operations. Assertions check claim results. Reports record p50/p95 microseconds,
+Node version, CPU and SHA-256 of both built Core modules. Compare at least three
+runs; burst latency reductions do not imply higher overall throughput.
+
 ## Bundle size
 
 `pnpm bench:size` reuses tsup to bundle seven browser-targeted ES2022 ESM fixtures:

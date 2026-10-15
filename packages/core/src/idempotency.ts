@@ -31,15 +31,29 @@ export function createMemoryIdempotencyStore(options: MemoryIdempotencyOptions =
   const entries = new Map<string, { token: string; expiresAt?: number }>()
   // Completion order makes pruning proportional to expired entries, rather than all entries.
   const completed = new Map<string, number>()
+  // Resume across claims so a burst does not repeatedly scan deleted Map slots.
+  let pruning: ReturnType<typeof completed.entries> | undefined
   return {
     async claim(key) {
       const now = Date.now()
-      for (const [expiredKey, expiresAt] of completed) {
-        if (expiresAt > now) break
+      pruning ??= completed.entries()
+      for (let pruned = 0; pruned < 128; pruned++) {
+        const next = pruning.next()
+        if (next.done || next.value[1] > now) {
+          pruning = undefined
+          break
+        }
+        const [expiredKey] = next.value
         completed.delete(expiredKey)
         entries.delete(expiredKey)
       }
-      const entry = entries.get(key)
+      let entry = entries.get(key)
+      // The requested ID may be beyond this claim's pruning budget.
+      if (entry?.expiresAt !== undefined && entry.expiresAt <= now) {
+        entries.delete(key)
+        completed.delete(key)
+        entry = undefined
+      }
       if (entry) return { status: entry.expiresAt === undefined ? "pending" : "completed" }
       if (entries.size >= maxEntries) throw new HibikiError("HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Idempotency store is full", 503)
       const token = crypto.randomUUID()
