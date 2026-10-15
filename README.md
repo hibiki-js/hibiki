@@ -105,6 +105,25 @@ await webhook.emitEvent("stripe.checkout.session.completed", {
 })
 ```
 
+CI keeps the detailed unit tests on Node.js 22 and runs a shared compatibility
+suite against built packages on Bun 1.4.3, Deno 2.9.6, and workerd
+1.20260730.1 (Miniflare 4.20260730.0, compatibility date `2026-07-30`, without
+`nodejs_compat`). The suite checks Core dispatch and Stripe, GitHub, and Discord
+signature verification, including rejected requests. Other runtime versions are
+not covered by these CI checks.
+
+To run the compatibility checks locally, install the pinned Bun and Deno versions,
+then use Node.js 22 and pnpm 10.4.1:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build:runtime
+pnpm typecheck:runtime
+pnpm test:bun
+pnpm test:deno
+pnpm test:workerd
+```
+
 ## Examples
 
 Examples are available for:

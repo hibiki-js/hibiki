@@ -22,12 +22,18 @@
     "eval:agents": "node evals/run.mjs",
     "eval:compare": "node evals/compare.mjs",
     "bench": "node benchmarks/run.mjs",
-    "bench:size": "node benchmarks/size.mjs"
+    "bench:size": "node benchmarks/size.mjs",
+    "build:runtime": "pnpm --filter @hibiki-js/runtime-tests^... build",
+    "typecheck:runtime": "tsc --noEmit -p tests/runtime/tsconfig.json",
+    "test:bun": "bun run --no-install --tsconfig-override=tests/runtime/tsconfig.json tests/runtime/run.mjs",
+    "test:deno": "deno run --config tests/runtime/deno.json tests/runtime/run.mjs",
+    "test:workerd": "node tests/runtime/workerd.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@vitest/coverage-v8": "^4.1.11",
     "hono": "^4.13.13",
+    "miniflare": "4.20260730.0",
     "tsup": "^8.5.1",
     "typescript": "^5.7.0",
     "vitepress": "1.6.4",
