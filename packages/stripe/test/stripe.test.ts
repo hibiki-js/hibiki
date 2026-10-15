@@ -252,3 +252,28 @@ describe("Strict signature encoding", () => {
     expect((await app.handle(req, { provider: "stripe" })).status).toBe(400)
   })
 })
+
+
+describe("Stripe signature candidates", () => {
+  it.each(["v1=zz", `v1=${"0".repeat(64)}`])("accepts a valid rotated signature after %s", async invalid => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    let calls = 0
+    app.on("stripe.invoice.paid", () => { calls++ })
+    const request = await stripeRequest({ id: "evt_rotation", type: "invoice.paid", data: { object: { id: "in_1", object: "invoice" } } }, "secret")
+    const header = request.headers.get("stripe-signature")!
+    request.headers.set("stripe-signature", header.replace(",v1=", `,${invalid},v1=`))
+    expect((await app.handle(request, { provider: "stripe" })).status).toBe(204)
+    expect(calls).toBe(1)
+  })
+
+  it("rejects a large body when all signatures have malformed encoding", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    let calls = 0
+    app.on("stripe.invoice.paid", () => { calls++ })
+    const request = new Request("https://test", { method: "POST", headers: { "stripe-signature": `t=${Math.floor(Date.now() / 1000)},v1=zz,v1=abc` }, body: "x".repeat(100_000) })
+    const response = await app.handle(request, { provider: "stripe" })
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
+    expect(calls).toBe(0)
+  })
+})

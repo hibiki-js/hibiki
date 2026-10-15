@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { defineProvider, Hibiki, type ParseResult } from "@hibiki-js/core"
 import { createWebhookTest, githubRequest, stripeRequest } from "../src/index.js"
 import { stripe } from "@hibiki-js/stripe"
@@ -94,5 +94,119 @@ describe("testing helpers", () => {
   it("does not silently ignore Stripe-only request options on GitHub", async () => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     await expect(createWebhookTest(app, { secrets: { github: "secret" } }).requestEvent("github.push", {}, { timestamp: 1 })).rejects.toThrow(/only for Stripe/)
+  })
+})
+
+
+describe("harness signing keys", () => {
+  const payload = { ref: "refs/heads/main", repository: { full_name: "hibiki/repo" } }
+  const invoice = { id: "in_test", object: "invoice" }
+  function app() { return new Hibiki().use(stripe({ secret: "secret" })).use(github({ secret: "secret" })) }
+
+  it("shares pending imports per provider for concurrent default requests", async () => {
+    const webhook = createWebhookTest(app(), { secrets: { stripe: "secret", github: "secret" } })
+    const imports = vi.spyOn(crypto.subtle, "importKey")
+    try {
+      const requests = await Promise.all(Array.from({ length: 8 }, () => Promise.all([
+        webhook.requestEvent("stripe.invoice.paid", invoice), webhook.requestEvent("github.push", payload),
+      ])))
+      expect(imports).toHaveBeenCalledTimes(2)
+      expect(new Set(await Promise.all(requests.map(async ([request]) => (await request.json() as { id: string }).id))).size).toBe(8)
+    } finally { imports.mockRestore() }
+  })
+
+  it("keeps caches local to each harness", async () => {
+    const application = app()
+    const a = createWebhookTest(application, { secrets: { github: "secret" } })
+    const b = createWebhookTest(application, { secrets: { github: "secret" } })
+    const imports = vi.spyOn(crypto.subtle, "importKey")
+    try {
+      await a.requestEvent("github.push", payload)
+      await b.requestEvent("github.push", payload)
+      expect(imports).toHaveBeenCalledTimes(2)
+    } finally { imports.mockRestore() }
+  })
+
+  it("does not cache overrides or replace a default key with them", async () => {
+    const application = app()
+    let calls = 0
+    application.on("stripe.invoice.paid", () => { calls++ })
+    const webhook = createWebhookTest(application, { secrets: { stripe: "secret" } })
+    const imports = vi.spyOn(crypto.subtle, "importKey")
+    try {
+      expect((await webhook.emitEvent("stripe.invoice.paid", invoice)).status).toBe(204)
+      for (let i = 0; i < 2; i++) expect((await webhook.emitEvent("stripe.invoice.paid", invoice, { secret: "wrong" })).status).toBe(400)
+      expect((await webhook.emitEvent("stripe.invoice.paid", invoice)).status).toBe(204)
+      expect(imports).toHaveBeenCalledTimes(3)
+      expect(calls).toBe(2)
+    } finally { imports.mockRestore() }
+  })
+
+  it("uses changed default secrets without retaining earlier configurations", async () => {
+    const secrets = { github: "secret" }
+    const webhook = createWebhookTest(app(), { secrets })
+    const imports = vi.spyOn(crypto.subtle, "importKey")
+    try {
+      await webhook.requestEvent("github.push", payload)
+      secrets.github = "new-secret"
+      const changed = await webhook.requestEvent("github.push", payload)
+      await webhook.requestEvent("github.push", payload)
+      secrets.github = "secret"
+      await webhook.requestEvent("github.push", payload)
+      expect(imports).toHaveBeenCalledTimes(3)
+      const expected = await githubRequest(payload, "push", "new-secret")
+      expect(changed.headers.get("x-hub-signature-256")).toBe(expected.headers.get("x-hub-signature-256"))
+    } finally { imports.mockRestore() }
+  })
+
+  it("retries a failed import", async () => {
+    const webhook = createWebhookTest(app(), { secrets: { github: "secret" } })
+    const error = new Error("temporary import failure")
+    const imports = vi.spyOn(crypto.subtle, "importKey").mockRejectedValueOnce(error)
+    try {
+      await expect(webhook.requestEvent("github.push", payload)).rejects.toBe(error)
+      await webhook.requestEvent("github.push", payload)
+      await webhook.requestEvent("github.push", payload)
+      expect(imports).toHaveBeenCalledTimes(2)
+    } finally { imports.mockRestore() }
+  })
+
+  it("does not evict a newer configuration when an older pending import fails", async () => {
+    const secrets = { github: "secret" }
+    const webhook = createWebhookTest(app(), { secrets })
+    let reject!: (error: Error) => void
+    const pending = new Promise<CryptoKey>((_resolve, fail) => { reject = fail })
+    const imports = vi.spyOn(crypto.subtle, "importKey").mockImplementationOnce(() => pending)
+    try {
+      const first = webhook.requestEvent("github.push", payload).catch(error => error)
+      secrets.github = "new-secret"
+      await webhook.requestEvent("github.push", payload)
+      const error = new Error("old import failed")
+      reject(error)
+      expect(await first).toBe(error)
+      await webhook.requestEvent("github.push", payload)
+      expect(imports).toHaveBeenCalledTimes(2)
+    } finally { imports.mockRestore() }
+  })
+
+  it("keeps standalone request helpers uncached", async () => {
+    const imports = vi.spyOn(crypto.subtle, "importKey")
+    try {
+      await githubRequest(payload, "push", "secret")
+      await githubRequest(payload, "push", "secret")
+      await stripeRequest(invoice, "secret")
+      await stripeRequest(invoice, "secret")
+      expect(imports).toHaveBeenCalledTimes(4)
+    } finally { imports.mockRestore() }
+  })
+})
+
+
+describe("standalone helper errors", () => {
+  it("returns rejected promises when payload serialization fails", async () => {
+    const payload: { circular?: unknown } = {}
+    payload.circular = payload
+    await expect(stripeRequest(payload, "secret")).rejects.toThrow(TypeError)
+    await expect(githubRequest(payload, "push", "secret")).rejects.toThrow(TypeError)
   })
 })

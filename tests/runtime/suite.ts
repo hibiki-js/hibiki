@@ -2,7 +2,7 @@ import { defineProvider, Hibiki } from "@hibiki-js/core"
 import { stripe } from "@hibiki-js/stripe"
 import { github } from "@hibiki-js/github"
 import { discord } from "@hibiki-js/discord"
-import { stripeRequest, githubRequest } from "@hibiki-js/testing"
+import { createWebhookTest, stripeRequest, githubRequest } from "@hibiki-js/testing"
 
 /** Fail the current compatibility case when values differ. */
 function equal(actual: unknown, expected: unknown, message: string): void {
@@ -110,6 +110,55 @@ const coreProvider = defineProvider<"example", { ping: { value: string } }>({
 
 type Case = { name: string; run: () => Promise<void> }
 const cases: Case[] = [
+  {
+    name: "Testing: concurrent defaults, overrides and changed secrets",
+    async run() {
+      const app = new Hibiki().use(stripe({ secret })).use(github({ secret }))
+      let stripeCalls = 0
+      let githubCalls = 0
+      app.on("stripe.invoice.paid", () => { stripeCalls++ })
+      app.on("github.issues.opened", () => { githubCalls++ })
+      const secrets = { stripe: secret, github: secret }
+      const webhook = createWebhookTest(app, { secrets })
+      const results = await Promise.all(Array.from({ length: 3 }, async (_, index) => Promise.all([
+        webhook.emitEvent("stripe.invoice.paid", { id: "in_runtime", object: "invoice" }),
+        webhook.emitEvent("github.issues.opened", { ...githubPayload, issue: { ...githubPayload.issue, number: index } }),
+      ])))
+      for (const pair of results) for (const result of pair) equal(result.status, 204, "Concurrent signed request")
+      equal((await webhook.emitEvent("stripe.invoice.paid", {}, { secret: "wrong" })).status, 400, "Override rejected")
+      equal((await webhook.emitEvent("stripe.invoice.paid", {})).status, 204, "Default remains valid")
+      secrets.stripe = "changed"
+      equal((await webhook.emitEvent("stripe.invoice.paid", {})).status, 400, "Changed secret is used")
+      secrets.stripe = secret
+      equal((await webhook.emitEvent("stripe.invoice.paid", {})).status, 204, "Restored secret is used")
+      equal(stripeCalls, 5, "Stripe handler count")
+      equal(githubCalls, 3, "GitHub handler count")
+    },
+  },
+  {
+    name: "Stripe: malformed signature before a valid rotated signature",
+    async run() {
+      const app = new Hibiki().use(stripe({ secret }))
+      let calls = 0
+      app.on("stripe.invoice.paid", () => { calls++ })
+      const request = await stripeRequest(stripePayload, secret)
+      request.headers.set("stripe-signature", request.headers.get("stripe-signature")!.replace(",v1=", ",v1=zz,v1="))
+      equal((await app.handle(request, { provider: "stripe" })).status, 204, "Rotated signature accepted")
+      equal(calls, 1, "Rotated signature handler count")
+    },
+  },
+  {
+    name: "Discord: overlong signature is rejected",
+    async run() {
+      const fixture = await providers.find(provider => provider.name === "Discord")!.create()
+      const request = await fixture.request()
+      request.headers.set("x-signature-ed25519", "0".repeat(8192))
+      const response = await fixture.handle(request)
+      equal(response.status, 401, "Overlong signature status")
+      equal(await response.text(), "HIBIKI_VERIFICATION_FAILED", "Overlong signature code")
+      equal(fixture.calls(), 0, "Rejected handler calls")
+    },
+  },
   {
     name: "GitHub: large signed payload keeps its authenticated ID and deduplicates",
     async run() {

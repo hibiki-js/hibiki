@@ -220,7 +220,7 @@ export function discord(options: DiscordOptions): HibikiProvider<"discord", Disc
     async verify({ rawBody, headers }) {
       const signature = headers.get("x-signature-ed25519")
       const timestamp = headers.get("x-signature-timestamp")
-      const signatureBytes = signature ? fromHex(signature) : undefined
+      const signatureBytes = signature?.length === 128 ? fromHex(signature) : undefined
       const timestampSeconds = timestamp ? Number(timestamp) : Number.NaN
       if (!timestamp || !Number.isInteger(timestampSeconds) || Math.abs(Date.now() / 1000 - timestampSeconds) > tolerance || !signatureBytes || signatureBytes.length !== 64) {
         throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "Missing or invalid Discord signature", 401)
