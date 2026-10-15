@@ -104,6 +104,23 @@ Build artifacts use a temporary directory and are removed after measurement.
 These are consumer bundle sizes, not npm tarball or installed dependency sizes.
 Compare with the same lockfile, build options and Node.js version.
 
+## Discord sender URL normalization
+
+Build this checkout and a separate baseline checkout, then run:
+
+```sh
+node benchmarks/discord-send.mjs --baseline /path/to/baseline --output benchmarks/results/discord-send.json
+```
+
+Fourteen cases cover reused clients and create-and-send calls, omitted/default,
+true and false wait options, plain URLs and existing/duplicate query parameters,
+and component/thread overrides. Each alternates versions for 500 warmup and
+2,000 measured sends. A local fetch implementation returns fresh JSON or 204
+Responses; there is no external network traffic. URL strings, payloads, headers,
+redirect modes, returned messages and fetch counts are compared. Reports include
+p50/p95/mean microseconds, environment and built-code hashes. Compare three runs.
+Network latency, Discord rate limits and server throughput are not measured.
+
 ## Automated smoke checks
 
 ```sh

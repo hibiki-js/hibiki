@@ -25,6 +25,36 @@ async function request(payload: unknown, privateKey: CryptoKey, timestamp = Stri
 }
 
 describe("Discord provider", () => {
+  it("isolates cached default queries from overrides and fetch URL mutations", async () => {
+    const urls: string[] = []
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token?thread_id=original&with_components=false&wait=false&wait=true&mode=a%20b", {
+      fetch: async (input, init) => {
+        expect(input).toBeInstanceOf(URL)
+        const url = input as URL
+        const wait = url.searchParams.get("wait") === "true"
+        urls.push(url.href)
+        expect(init?.redirect).toBe("error")
+        // Custom fetch implementations must never mutate the cached base.
+        url.pathname = "/mutated"
+        url.searchParams.set("thread_id", "mutated")
+        return wait ? Response.json({ id: "message", channel_id: "channel" }) : new Response(null, { status: 204 })
+      },
+    })
+    await webhook.send({ content: "first" })
+    expect(await webhook.send({ content: "without wait" }, { wait: false })).toBeUndefined()
+    await webhook.send({ components: [] }, { threadId: "override" })
+    await Promise.all([webhook.send({ content: "again" }), webhook.send({ content: "concurrent" })])
+    const base = "https://discord.com/api/webhooks/123/token?"
+    const defaults = `${base}thread_id=original&wait=true&mode=a+b`
+    expect(urls).toEqual([
+      defaults,
+      `${base}thread_id=original&wait=false&mode=a+b`,
+      `${base}thread_id=override&with_components=true&wait=true&mode=a+b`,
+      defaults,
+      defaults,
+    ])
+  })
+
   it("sends JSON messages to an incoming webhook and parses the created message", async () => {
     let requestUrl: URL | undefined
     let requestBody = ""
