@@ -223,6 +223,59 @@ describe("Bounded memory store", () => {
     } finally { vi.useRealTimers() }
   })
 
+  it("reclaims a requested expired ID beyond the cleanup batch without accepting stale tokens", async () => {
+    vi.useFakeTimers()
+    try {
+      const store = createMemoryIdempotencyStore({ maxEntries: 260, retentionMs: 100 })
+      const tokens = []
+      for (let i = 0; i < 260; i++) {
+        const claim = await store.claim(String(i))
+        if (claim.status !== "acquired") throw new Error("Unexpected claim")
+        tokens.push(claim.token)
+        await store.complete(String(i), claim.token)
+      }
+      vi.advanceTimersByTime(100)
+      const renewed = await store.claim("259")
+      if (renewed.status !== "acquired") throw new Error("Expired ID was not reclaimed")
+      expect(renewed.token).not.toBe(tokens[259])
+      await store.complete("259", tokens[259]!)
+      await store.release("259", tokens[259]!)
+      expect((await store.claim("259")).status).toBe("pending")
+      await store.complete("259", renewed.token)
+      expect((await store.claim("259")).status).toBe("completed")
+    } finally { vi.useRealTimers() }
+  })
+
+  it("frees capacity across cleanup batches while preserving live completed and pending IDs", async () => {
+    vi.useFakeTimers()
+    try {
+      const store = createMemoryIdempotencyStore({ maxEntries: 300, retentionMs: 100 })
+      for (let i = 0; i < 298; i++) {
+        const claim = await store.claim(String(i))
+        if (claim.status !== "acquired") throw new Error("Unexpected claim")
+        await store.complete(String(i), claim.token)
+      }
+      const pending = await store.claim("pending")
+      if (pending.status !== "acquired") throw new Error("Unexpected claim")
+      const live = await store.claim("live")
+      if (live.status !== "acquired") throw new Error("Unexpected claim")
+      vi.advanceTimersByTime(50)
+      await store.complete("live", live.token)
+      vi.advanceTimersByTime(50)
+      for (let i = 0; i < 298; i++) {
+        const claim = await store.claim(`new-${i}`)
+        if (claim.status !== "acquired") throw new Error("Expired capacity was not freed")
+        await store.complete(`new-${i}`, claim.token)
+      }
+      expect((await store.claim("live")).status).toBe("completed")
+      expect((await store.claim("pending")).status).toBe("pending")
+      await expect(store.claim("over-capacity")).rejects.toMatchObject({ status: 503 })
+      vi.advanceTimersByTime(50)
+      expect((await store.claim("live")).status).toBe("acquired")
+      expect((await store.claim("pending")).status).toBe("pending")
+    } finally { vi.useRealTimers() }
+  })
+
   it("does not expire running handlers and ignores stale release tokens", async () => {
     const store = createMemoryIdempotencyStore({ maxEntries: 1, retentionMs: 1 })
     const claim = await store.claim("one")
