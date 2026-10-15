@@ -57,8 +57,8 @@ noise can exceed small optimizations.
 
 ## Bundle size
 
-`pnpm bench:size` reuses tsup to bundle five browser-targeted ES2022 ESM fixtures:
-Core alone, Core + each receiving provider, and Discord sending alone. It disables
+`pnpm bench:size` reuses tsup to bundle seven browser-targeted ES2022 ESM fixtures:
+Core alone, Core + each receiving provider, and each provider sending alone. It disables
 source aliases and checks source maps to ensure it measures built packages.
 Unused exports can be removed normally by the bundler. The report includes
 minified bytes, gzip level 9 bytes and Brotli bytes, excluding source maps and

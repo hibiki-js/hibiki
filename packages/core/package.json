@@ -34,5 +34,6 @@
     "typescript",
     "hibiki",
     "core"
-  ]
+  ],
+  "sideEffects": false
 }

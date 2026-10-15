@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { readBody } from "../src/body.js"
 import { createMemoryIdempotencyStore, defineProvider, Hibiki, HibikiError } from "../src/index.js"
 
 const eventProvider = defineProvider<"example", { ping: { id: string } }>({
@@ -60,6 +61,29 @@ describe("Webhook resource limits", () => {
     const app = new Hibiki({ maxBodyBytes: 4 }).use(eventProvider)
     app.on("example.ping", async ({ request }) => { expect(await request.text()).toBe("1234") })
     expect((await handle(app, "1234")).status).toBe(204)
+  })
+
+  it("returns owned bytes without changing the source stream or original request", async () => {
+    const chunk = new TextEncoder().encode("1234")
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(chunk); controller.close() } })
+    const req = new Request("https://test", { method: "POST", body, ...({ duplex: "half" } as {}) })
+    const bytes = await readBody(req, 4)
+    expect([...bytes]).toEqual([...chunk])
+    bytes.fill(0)
+    expect(new TextDecoder().decode(chunk)).toBe("1234")
+    expect(await req.text()).toBe("1234")
+  })
+
+  it("preserves bytes at the limit across empty and multiple stream chunks", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of [new Uint8Array(), new Uint8Array([0, 255]), new Uint8Array([128, 1])]) controller.enqueue(chunk)
+        controller.close()
+      },
+    })
+    const req = new Request("https://test", { method: "POST", body, ...({ duplex: "half" } as {}) })
+    expect([...await readBody(req, 4)]).toEqual([0, 255, 128, 1])
+    expect([...new Uint8Array(await req.arrayBuffer())]).toEqual([0, 255, 128, 1])
   })
 
   it.each([0, -1, NaN, Infinity, 1.5])("rejects invalid limits: %s", (maxBodyBytes) => {

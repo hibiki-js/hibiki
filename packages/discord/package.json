@@ -37,5 +37,6 @@
     "typescript",
     "hibiki",
     "discord"
-  ]
+  ],
+  "sideEffects": false
 }

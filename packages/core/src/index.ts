@@ -94,7 +94,7 @@ export interface HandleOptions<R extends Registry> {
   waitUntil?: (promise: Promise<unknown>) => void
 }
 
-const decoder = new TextDecoder()
+const decoder = /* @__PURE__ */ new TextDecoder()
 
 /** Immutable, type-state webhook application builder. */
 export class Hibiki<R extends Registry = {}> {
