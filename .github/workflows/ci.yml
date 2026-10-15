@@ -26,6 +26,7 @@ jobs:
       - run: pnpm check:examples
       - run: pnpm test:coverage
       - run: pnpm build
+      - run: node --test benchmarks/phases-check.mjs && pnpm bench:phases --iterations=3 --warmup=1
       - run: pnpm docs:build
       - uses: codecov/codecov-action@v7
         with:

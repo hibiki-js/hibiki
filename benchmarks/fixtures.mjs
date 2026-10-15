@@ -9,11 +9,11 @@ const hex = buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(1
 const secret = "benchmark-only-secret"
 
 // Signing, key generation, app setup and Request construction are outside timing.
-export async function createFixture(name, bytes, count) {
+export async function createFixture(name, bytes, count, { HibikiClass = Hibiki } = {}) {
   const hmac = name === "discord" ? undefined : await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
   const pair = name === "discord" ? await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"]) : undefined
   const provider = name === "stripe" ? stripe({ secret }) : name === "github" ? github({ secret }) : discord({ publicKey: hex(await crypto.subtle.exportKey("raw", pair.publicKey)) })
-  const app = new Hibiki().use(provider)
+  const app = new HibikiClass().use(provider)
   let calls = 0
   const event = name === "stripe" ? "invoice.paid" : name === "github" ? "issues.opened" : "application_command"
   app.on(`${name}.${event}`, () => { calls++; return new Response(null, { status: 204 }) })

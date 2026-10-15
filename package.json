@@ -22,6 +22,7 @@
     "eval:agents": "node evals/run.mjs",
     "eval:compare": "node evals/compare.mjs",
     "bench": "node benchmarks/run.mjs",
+    "bench:phases": "node benchmarks/phases.mjs",
     "bench:size": "node benchmarks/size.mjs",
     "build:runtime": "pnpm --filter @hibiki-js/runtime-tests^... build",
     "typecheck:runtime": "tsc --noEmit -p tests/runtime/tsconfig.json",

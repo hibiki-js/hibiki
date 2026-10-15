@@ -8,6 +8,7 @@ pnpm install --frozen-lockfile
 pnpm build
 mkdir -p benchmarks/results
 pnpm bench --output=benchmarks/results/timing.json
+pnpm bench:phases --output=benchmarks/results/phases.json
 pnpm bench:size --output=benchmarks/results/size.json
 ```
 
@@ -55,6 +56,50 @@ performance from Node.js results. Add targeted cases when investigating those
 behaviors. Timing results have no CI pass/fail threshold because shared-runner
 noise can exceed small optimizations.
 
+## Handle phase profiling
+
+`pnpm bench:phases` uses the same sizes, signed requests, successful dispatches,
+iteration limits and warmup defaults as `pnpm bench`. Each case alternates normal
+and instrumented requests, reversing their order on every iteration. The two
+applications have separate default memory stores. Signing and input preparation
+remain outside timing; every request must execute its handler.
+
+The command inserts synchronous timestamps into a temporary copy of **built**
+Core and imports that copy. The original build and production sources are never
+modified. Every insertion anchor must match exactly once; every successful
+request must visit every boundary once, in order, or the command fails. This
+deliberately profiles only the successful, registered-handler path without
+middleware. It does not measure duplicate delivery, rejection, release, custom
+stores, application I/O or contention.
+
+| Phase | Included work |
+| --- | --- |
+| `bodyRead` | Core's bounded body reader, including Request cloning, stream reads and owned byte buffer creation |
+| `verify` | Provider verification, including Web Crypto calls and any key import |
+| `decodeParse` | TextDecoder and the complete provider parser, including JSON parsing, event validation and GitHub's authenticated-body SHA-256 deduplication ID |
+| `storeClaim` | Awaiting the default memory store's claim, including UUID creation and pruning |
+| `handler` | Awaiting the small fixture handler, including its empty 204 Response creation |
+| `storeComplete` | Awaiting the memory store's completion |
+| `other` | Total minus measured phases: content-type checks, routing, context/key construction, remaining Core work, fixture response assertion and instrumentation bookkeeping |
+
+The JSON report includes mean/p50/p95/p99 milliseconds for each phase and both
+instrumented and uninstrumented total latency. `shareOfMeanPercent` uses each
+phase's mean divided by the instrumented total mean, so the shares including
+`other` sum to 100%. Percentiles are not additive. Spans include asynchronous
+waiting and GC/scheduling interruptions, rather than pure CPU time.
+
+Instrumentation adds clock reads, calls and allocations and can change JIT/GC
+behavior. `instrumentationMeanDeltaMs` compares alternating totals to expose the
+effect, including noise; it can be negative and is not subtracted from phases.
+Use repeated runs and the uninstrumented `pnpm bench` to validate an optimization.
+This is Node.js profiling, not a cross-runtime or memory allocation profile.
+Do not attribute all `decodeParse` time to JSON.parse, or remove signature or
+deduplication checks based on these measurements.
+
+The existing Node.js CI job runs recorder checks and a three-iteration smoke
+profile after building, without performance thresholds. This detects stale
+instrumentation anchors and missing phases. Full profiling remains opt-in.
+
 ## Bundle size
 
 `pnpm bench:size` reuses tsup to bundle seven browser-targeted ES2022 ESM fixtures:
@@ -72,6 +117,8 @@ Compare with the same lockfile, build options and Node.js version.
 
 ```sh
 pnpm bench --iterations=3 --warmup=1
+node --test benchmarks/phases-check.mjs
+pnpm bench:phases --iterations=3 --warmup=1
 pnpm bench:size
 ```
 
