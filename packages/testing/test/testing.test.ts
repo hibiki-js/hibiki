@@ -142,6 +142,27 @@ describe("harness signing keys", () => {
     } finally { imports.mockRestore() }
   })
 
+  it("rejects GitHub secret overrides without caching them or replacing the default key", async () => {
+    const application = app()
+    const seen: string[] = []
+    application.on("github.push", ({ event }) => { seen.push(event.ref) })
+    const webhook = createWebhookTest(application, { secrets: { github: "secret" } })
+    const imports = vi.spyOn(crypto.subtle, "importKey")
+    try {
+      expect((await webhook.emitEvent("github.push", payload)).status).toBe(204)
+      for (let i = 0; i < 2; i++) {
+        const response = await webhook.emitEvent("github.push", { ...payload, ref: `refs/heads/rejected-${i}` }, { secret: "wrong" })
+        expect(response.status).toBe(400)
+        expect(await response.text()).toBe("HIBIKI_VERIFICATION_FAILED")
+        expect(seen).toEqual([payload.ref])
+      }
+      const next = { ...payload, ref: "refs/heads/next" }
+      expect((await webhook.emitEvent("github.push", next)).status).toBe(204)
+      expect(seen).toEqual([payload.ref, next.ref])
+      expect(imports).toHaveBeenCalledTimes(3)
+    } finally { imports.mockRestore() }
+  })
+
   it("uses changed default secrets without retaining earlier configurations", async () => {
     const secrets = { github: "secret" }
     const webhook = createWebhookTest(app(), { secrets })

@@ -70,7 +70,8 @@ async function requestForEvent(provider: string, nativeEventName: string, payloa
     const body = action && !(payload && typeof payload === "object" && "action" in payload)
       ? { ...(payload as object), action }
       : payload
-    return sign === hmac ? githubRequest(body, event ?? nativeEventName, secret) : signedGitHubRequest(body, event ?? nativeEventName, secret, sign)
+    // split() always returns a first element, including for an empty event name.
+    return sign === hmac ? githubRequest(body, event!, secret) : signedGitHubRequest(body, event!, secret, sign)
   }
   throw new Error(`No signed-request helper for provider: ${provider}`)
 }
