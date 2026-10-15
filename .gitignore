@@ -7,3 +7,4 @@ coverage/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 evals/results/
+benchmarks/results/

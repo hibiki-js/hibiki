@@ -20,7 +20,9 @@
     "check:agent-docs": "node scripts/generate-agent-docs.mjs --check",
     "check:evals": "node --test evals/self-check.mjs evals/source-metrics-check.mjs",
     "eval:agents": "node evals/run.mjs",
-    "eval:compare": "node evals/compare.mjs"
+    "eval:compare": "node evals/compare.mjs",
+    "bench": "node benchmarks/run.mjs",
+    "bench:size": "node benchmarks/size.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

@@ -118,6 +118,8 @@ See [`examples/`](./examples).
 
 [`examples/hono-webhooks`](./examples/hono-webhooks) injects business services and tests Stripe/GitHub through actual Hono routes, including side effects and invalid signatures. Run `pnpm check:examples` in this repository.
 
+Performance and consumer bundle-size measurements are available in [`benchmarks/`](./benchmarks).
+
 ## Coding agents
 
 Use the [reference index](https://hibiki-js.github.io/llms.txt) and [versioned provider coverage](https://hibiki-js.github.io/providers.json). The optional [Hibiki skill](./skills/hibiki/SKILL.md) covers implementation and local verification. [Agent evaluations](./evals/README.md) measure neutral selection, provider SDK/direct implementation comparisons, and changes to existing Hibiki applications. Model runs are opt-in.
