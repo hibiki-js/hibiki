@@ -95,9 +95,6 @@ export interface HandleOptions<R extends Registry> {
 }
 
 const decoder = new TextDecoder()
-const RESPONSE_UNSUPPORTED = new Response(null, { status: 200 })
-const RESPONSE_NO_CONTENT = new Response(null, { status: 204 })
-const RESPONSE_INTERNAL = new Response("Internal webhook error", { status: 500 })
 
 /** Immutable, type-state webhook application builder. */
 export class Hibiki<R extends Registry = {}> {
@@ -161,17 +158,17 @@ export class Hibiki<R extends Registry = {}> {
       catch (error) { if (error instanceof HibikiError) throw error; throw new HibikiError("HIBIKI_PARSE_FAILED", "Webhook payload could not be parsed", 400) }
       if (parsed.kind === "unsupported") {
         if (this.options.strictEvents) throw new HibikiError("HIBIKI_UNSUPPORTED_EVENT", "Unsupported event", 400)
-        return RESPONSE_UNSUPPORTED
+        return new Response(null, { status: 200 })
       }
       const handler = this.handlers.get(`${provider.name}.${parsed.eventName}`)
-      if (!handler) return RESPONSE_NO_CONTENT
+      if (!handler) return new Response(null, { status: 204 })
       if (parsed.id) {
         // IDs must originate from signed payloads, never unsigned delivery headers.
         const key = JSON.stringify([provider.name, parsed.id])
         let acquired
         try { acquired = await this.idempotencyStore.claim(key) }
         catch { throw new HibikiError("HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Idempotency store unavailable", 503) }
-        if (acquired.status === "completed") return RESPONSE_NO_CONTENT
+        if (acquired.status === "completed") return new Response(null, { status: 204 })
         if (acquired.status === "pending") throw new HibikiError("HIBIKI_EVENT_IN_PROGRESS", "Webhook event is in progress", 503)
         claim = { key, token: acquired.token }
       }
@@ -198,7 +195,7 @@ export class Hibiki<R extends Registry = {}> {
           await dispatch()
         }
       } catch { throw new HibikiError("HIBIKI_HANDLER_FAILED", "Webhook handler failed", 500) }
-      const response = result instanceof Response ? result : RESPONSE_NO_CONTENT
+      const response = result instanceof Response ? result : new Response(null, { status: 204 })
       if (claim) {
         const owned = claim
         // After handler success, a completion failure must keep the claim pending.
@@ -216,7 +213,7 @@ export class Hibiki<R extends Registry = {}> {
         catch { return new Response("HIBIKI_IDEMPOTENCY_UNAVAILABLE", { status: 503 }) }
       }
       if (error instanceof HibikiError) return new Response(error.code, { status: error.status })
-      return RESPONSE_INTERNAL
+      return new Response("Internal webhook error", { status: 500 })
     }
   }
 }

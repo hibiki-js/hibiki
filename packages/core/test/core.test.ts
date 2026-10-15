@@ -55,6 +55,17 @@ describe("Hibiki", () => {
     expect(await (await app.handle(new Request("https://test", { method: "POST", body: "bad-json" }), { provider: "example" })).text()).toBe("HIBIKI_PARSE_FAILED")
   })
 
+  it("returns a fresh, readable response for every unexpected provider failure", async () => {
+    const app = new Hibiki().use({ ...provider, async verify() { throw new Error("private detail") } })
+    const first = await app.handle(new Request("https://test"), { provider: "example" })
+    const second = await app.handle(new Request("https://test"), { provider: "example" })
+    expect(first).not.toBe(second)
+    for (const response of [first, second]) {
+      expect(response.status).toBe(500)
+      expect(await response.text()).toBe("Internal webhook error")
+    }
+  })
+
   it("rejects duplicate handlers", () => {
     const app = new Hibiki().use(provider)
     app.on("example.ping", () => {})
