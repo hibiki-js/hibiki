@@ -28,30 +28,36 @@ export function createMemoryIdempotencyStore(options: MemoryIdempotencyOptions =
   const maxEntries = options.maxEntries ?? 10_000
   if (!Number.isFinite(retentionMs) || retentionMs <= 0) throw new TypeError("retentionMs must be a positive finite number")
   if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) throw new TypeError("maxEntries must be a positive safe integer")
-  const entries = new Map<string, { token: string; expiresAt?: number }>()
-  // Completion order makes pruning proportional to expired entries, rather than all entries.
-  const completed = new Map<string, number>()
-  // Resume across claims so a burst does not repeatedly scan deleted Map slots.
-  let pruning: ReturnType<typeof completed.entries> | undefined
+  type Completed = {
+    token: string
+    key: string
+    expiresAt: number
+    previous: Completed | undefined
+    next: Completed | undefined
+  }
+  const entries = new Map<string, { token: string; expiresAt?: undefined } | Completed>()
+  // Only current completed entries are queued; pending IDs never expire.
+  let head: Completed | undefined
+  let tail: Completed | undefined
+
+  // Unlink directly even when a requested expired ID is beyond the cleanup batch.
+  function removeCompleted(entry: Completed): void {
+    if (entry.previous) entry.previous.next = entry.next
+    else head = entry.next
+    if (entry.next) entry.next.previous = entry.previous
+    else tail = entry.previous
+    entry.previous = undefined
+    entry.next = undefined
+    entries.delete(entry.key)
+  }
   return {
     async claim(key) {
       const now = Date.now()
-      pruning ??= completed.entries()
-      for (let pruned = 0; pruned < 128; pruned++) {
-        const next = pruning.next()
-        if (next.done || next.value[1] > now) {
-          pruning = undefined
-          break
-        }
-        const [expiredKey] = next.value
-        completed.delete(expiredKey)
-        entries.delete(expiredKey)
-      }
+      for (let pruned = 0; pruned < 128 && head && head.expiresAt <= now; pruned++) removeCompleted(head)
       let entry = entries.get(key)
       // The requested ID may be beyond this claim's pruning budget.
       if (entry?.expiresAt !== undefined && entry.expiresAt <= now) {
-        entries.delete(key)
-        completed.delete(key)
+        removeCompleted(entry)
         entry = undefined
       }
       if (entry) return { status: entry.expiresAt === undefined ? "pending" : "completed" }
@@ -63,8 +69,11 @@ export function createMemoryIdempotencyStore(options: MemoryIdempotencyOptions =
     async complete(key, token) {
       const entry = entries.get(key)
       if (entry?.token !== token || entry.expiresAt !== undefined) return
-      entry.expiresAt = Date.now() + retentionMs
-      completed.set(key, entry.expiresAt)
+      const completed: Completed = { token, key, expiresAt: Date.now() + retentionMs, previous: tail, next: undefined }
+      if (tail) tail.next = completed
+      else head = completed
+      tail = completed
+      entries.set(key, completed)
     },
     async release(key, token) {
       const entry = entries.get(key)

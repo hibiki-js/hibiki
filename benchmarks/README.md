@@ -72,6 +72,27 @@ operations. Assertions check claim results. Reports record p50/p95 microseconds,
 Node version, CPU and SHA-256 of both built Core modules. Compare at least three
 runs; burst latency reductions do not imply higher overall throughput.
 
+Completion-only, claim-and-complete, and expiry-churn cases also use 100 batches
+of 1,000 operations. Each batch uses a fresh store; completion-only setup claims
+IDs outside timing. Churn pre-populates and expires 1,000 completed IDs before
+timing their renewal and completion. All IDs must finish in the completed state.
+
+To compare retained memory, use the same built checkouts:
+
+```sh
+node benchmarks/idempotency-memory.mjs --baseline /path/to/baseline --output benchmarks/results/idempotency-memory.json
+```
+
+This launches five isolated Node processes per version and scenario, alternating
+version order. Each child uses `--expose-gc` and measures the heap delta after
+four GC cycles on separate event-loop turns. Common keys are retained before the
+initial measurement. Cases cover 1,000 empty stores, 10,000 pending/completed
+IDs, a fully drained store, and 10 rounds of expiry and renewal of 10,000 IDs.
+Stores remain reachable through the final GC. The delta includes runtime code
+and bookkeeping initialized during the operation; it measures retained JS heap,
+not peak memory, total allocations or process RSS. Both tools check built Core
+hashes again before writing their reports.
+
 ## Bundle size
 
 `pnpm bench:size` reuses tsup to bundle seven browser-targeted ES2022 ESM fixtures:
