@@ -284,6 +284,8 @@ describe("Bounded memory store", () => {
     vi.useFakeTimers()
     try {
       const store = createMemoryIdempotencyStore({ maxEntries: 1, retentionMs: 100 })
+      await store.complete("missing", "unknown-token")
+      await store.release("missing", "unknown-token")
       const claim = await store.claim("one")
       expect(claim.status).toBe("acquired")
       if (claim.status !== "acquired") throw new Error("Unexpected claim")
