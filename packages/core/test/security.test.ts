@@ -213,6 +213,65 @@ describe("Authenticated event idempotency", () => {
 })
 
 describe("Bounded memory store", () => {
+  it("expires in completion order and does not extend retention on repeated completion", async () => {
+    vi.useFakeTimers()
+    try {
+      const store = createMemoryIdempotencyStore({ maxEntries: 2, retentionMs: 100 })
+      const first = await store.claim("first"), second = await store.claim("second")
+      if (first.status !== "acquired" || second.status !== "acquired") throw new Error("Unexpected claim")
+      await store.complete("second", second.token)
+      vi.advanceTimersByTime(50)
+      await store.complete("first", first.token)
+      await store.complete("second", second.token)
+      vi.advanceTimersByTime(50)
+      expect((await store.claim("first")).status).toBe("completed")
+      const renewed = await store.claim("second")
+      if (renewed.status !== "acquired") throw new Error("Repeated completion extended retention")
+      await store.complete("second", second.token)
+      expect((await store.claim("second")).status).toBe("pending")
+      await store.complete("second", renewed.token)
+      vi.advanceTimersByTime(50)
+      expect((await store.claim("first")).status).toBe("acquired")
+      expect((await store.claim("second")).status).toBe("completed")
+      vi.advanceTimersByTime(50)
+      expect((await store.claim("second")).status).toBe("acquired")
+    } finally { vi.useRealTimers() }
+  })
+
+  it("reclaims expired middle and last IDs after clock rollback without removing live IDs", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(0)
+      const store = createMemoryIdempotencyStore({ retentionMs: 100, maxEntries: 4 })
+      const tokens: Record<string, string> = {}
+      for (const key of ["live", "first", "middle", "last"]) {
+        const claim = await store.claim(key)
+        if (claim.status !== "acquired") throw new Error("Unexpected claim")
+        tokens[key] = claim.token
+      }
+      vi.setSystemTime(1000)
+      await store.complete("live", tokens.live!)
+      vi.setSystemTime(0)
+      for (const key of ["first", "middle", "last"]) await store.complete(key, tokens[key]!)
+      vi.setSystemTime(100)
+      for (const key of ["middle", "last", "first"]) {
+        const renewed = await store.claim(key)
+        if (renewed.status !== "acquired") throw new Error("Expired ID was not reclaimed")
+        await store.complete(key, tokens[key]!)
+        await store.release(key, tokens[key]!)
+        expect((await store.claim(key)).status).toBe("pending")
+        await store.complete(key, renewed.token)
+      }
+      expect((await store.claim("live")).status).toBe("completed")
+      await expect(store.claim("full")).rejects.toMatchObject({ status: 503 })
+      vi.setSystemTime(1100)
+      const drained = await store.claim("live")
+      if (drained.status !== "acquired") throw new Error("Expired queue was not drained")
+      await store.complete("live", drained.token)
+      expect((await store.claim("live")).status).toBe("completed")
+    } finally { vi.useRealTimers() }
+  })
+
   it.each([0, -1, NaN, Infinity])("rejects invalid retention: %s", retentionMs => {
     expect(() => createMemoryIdempotencyStore({ retentionMs })).toThrow("retentionMs must be a positive finite number")
   })

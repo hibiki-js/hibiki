@@ -111,6 +111,40 @@ const coreProvider = defineProvider<"example", { ping: { value: string } }>({
 type Case = { name: string; run: () => Promise<void> }
 const cases: Case[] = [
   {
+    name: "Core: bounded expiry cleanup preserves pending IDs and renewed ownership",
+    async run() {
+      const { createMemoryIdempotencyStore } = await import("@hibiki-js/core")
+      const originalNow = Date.now
+      let now = originalNow()
+      Date.now = () => now
+      try {
+        const store = createMemoryIdempotencyStore({ retentionMs: 100, maxEntries: 261 })
+        const tokens: string[] = []
+        for (let i = 0; i < 260; i++) {
+          const claim = await store.claim(String(i))
+          equal(claim.status, "acquired", "Initial claim")
+          if (claim.status !== "acquired") throw new Error("Missing token")
+          tokens.push(claim.token)
+          await store.complete(String(i), claim.token)
+        }
+        equal((await store.claim("pending")).status, "acquired", "Running claim")
+        now += 100
+        const renewed = await store.claim("259")
+        equal(renewed.status, "acquired", "Expired ID beyond cleanup batch")
+        if (renewed.status !== "acquired") throw new Error("Missing renewed token")
+        await store.complete("259", tokens[259]!)
+        await store.release("259", tokens[259]!)
+        equal((await store.claim("259")).status, "pending", "Stale tokens ignored")
+        await store.complete("259", renewed.token)
+        equal((await store.claim("259")).status, "completed", "Renewed owner completes")
+        equal((await store.claim("pending")).status, "pending", "Running ID never expires")
+        now += 100
+        equal((await store.claim("259")).status, "acquired", "Queue drains and accepts renewed ID")
+        equal((await store.claim("pending")).status, "pending", "Running ID survives cleanup")
+      } finally { Date.now = originalNow }
+    },
+  },
+  {
     name: "Testing: concurrent defaults, overrides and changed secrets",
     async run() {
       const app = new Hibiki().use(stripe({ secret })).use(github({ secret }))

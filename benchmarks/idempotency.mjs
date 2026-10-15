@@ -131,8 +131,43 @@ try {
       candidate: stats(samples[1]),
     })
   }
+  for (const operation of ["complete", "claim and complete", "expiry churn"]) {
+    const samples = [[], []]
+    for (let batch = 0; batch < 100; batch++) {
+      for (const variant of batch % 2 ? [1, 0] : [0, 1]) {
+        const store = variants[variant].module.createMemoryIdempotencyStore({ retentionMs: 100, maxEntries: 1000 })
+        const keys = Array.from({ length: 1000 }, (_, i) => `event-${i}`)
+        const tokens = []
+        if (operation !== "claim and complete") {
+          for (const key of keys) {
+            const claim = await store.claim(key)
+            assert.equal(claim.status, "acquired")
+            tokens.push(claim.token)
+            if (operation === "expiry churn") await store.complete(key, claim.token)
+          }
+          clock += 100
+        }
+        const start = performance.now()
+        for (let i = 0; i < keys.length; i++) {
+          let token = tokens[i]
+          if (operation !== "complete") {
+            const claim = await store.claim(keys[i])
+            assert.equal(claim.status, "acquired")
+            token = claim.token
+          }
+          await store.complete(keys[i], token)
+        }
+        samples[variant].push((performance.now() - start) / keys.length)
+        for (const key of keys) assert.equal((await store.claim(key)).status, "completed")
+      }
+    }
+    report.results.push({ case: operation, baseline: stats(samples[0]), candidate: stats(samples[1]) })
+  }
 } finally {
   Date.now = now
+}
+for (const variant of variants) {
+  assert.equal(createHash("sha256").update(await readFile(resolve(variant.root, "packages/core/dist/index.js"))).digest("hex"), variant.sha256, "Built Core changed during measurement")
 }
 for (const result of report.results) console.log(JSON.stringify(result))
 if (values.output)
