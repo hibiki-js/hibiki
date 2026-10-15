@@ -12,7 +12,7 @@ const directory = await mkdtemp(join(tmpdir(), "hibiki-size-"))
 const measuredEnvironment = await environment()
 const results = []
 try {
-  for (const fixture of ["core", "stripe-receive", "github-receive", "discord-receive", "discord-send"]) {
+  for (const fixture of ["core", "stripe-receive", "github-receive", "discord-receive", "discord-send", "stripe-send", "github-send"]) {
     await build({
       entry: [`benchmarks/fixtures/${fixture}.mjs`],
       outDir: directory, outExtension: () => ({ js: ".mjs" }),

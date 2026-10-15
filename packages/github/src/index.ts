@@ -113,50 +113,40 @@ export function createGitHubWebhook(url: string, options: GitHubWebhookSenderOpt
   }
 }
 
-const encoder = new TextEncoder()
+const encoder = /* @__PURE__ */ new TextEncoder()
 
 /** Decode exactly one SHA-256 digest; reject malformed signature encodings. */
 function fromHex(value: string): Uint8Array | undefined {
   if (!/^[0-9a-f]{64}$/i.test(value)) return undefined
   const bytes = new Uint8Array(value.length / 2)
+  // The validation above limits input to ASCII hex; A-F/a-f need a +9 correction.
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16)
+    const high = value.charCodeAt(i * 2)
+    const low = value.charCodeAt(i * 2 + 1)
+    bytes[i] = (((high & 15) + (high > 57 ? 9 : 0)) << 4) | ((low & 15) + (low > 57 ? 9 : 0))
   }
   return bytes
 }
 
-type ActionEvent =
-  | ["pull_request", "opened" | "closed" | "reopened" | "synchronize" | "ready_for_review" | "labeled", keyof GitHubEvents]
-  | ["pull_request_review", "submitted", keyof GitHubEvents]
-  | ["issues", "opened" | "closed" | "reopened", keyof GitHubEvents]
-  | ["issue_comment", "created", keyof GitHubEvents]
-  | ["release", "published", keyof GitHubEvents]
-  | ["workflow_run", "completed", keyof GitHubEvents]
-  | ["workflow_job", "completed", keyof GitHubEvents]
-  | ["check_suite", "completed", keyof GitHubEvents]
-  | ["check_run", "completed", keyof GitHubEvents]
-  | ["deployment", "created", keyof GitHubEvents]
-  | ["deployment_status", "created", keyof GitHubEvents]
-
-const ACTION_EVENTS: ActionEvent[] = [
-  ["pull_request", "opened", "pull_request.opened"],
-  ["pull_request", "closed", "pull_request.closed"],
-  ["pull_request", "reopened", "pull_request.reopened"],
-  ["pull_request", "synchronize", "pull_request.synchronize"],
-  ["pull_request", "ready_for_review", "pull_request.ready_for_review"],
-  ["pull_request", "labeled", "pull_request.labeled"],
-  ["pull_request_review", "submitted", "pull_request_review.submitted"],
-  ["issues", "opened", "issues.opened"],
-  ["issues", "closed", "issues.closed"],
-  ["issues", "reopened", "issues.reopened"],
-  ["issue_comment", "created", "issue_comment.created"],
-  ["release", "published", "release.published"],
-  ["workflow_run", "completed", "workflow_run.completed"],
-  ["workflow_job", "completed", "workflow_job.completed"],
-  ["check_suite", "completed", "check_suite.completed"],
-  ["check_run", "completed", "check_run.completed"],
-  ["deployment", "created", "deployment.created"],
-  ["deployment_status", "created", "deployment_status.created"],
+const ACTION_EVENTS: readonly (keyof GitHubEvents)[] = [
+  "pull_request.opened",
+  "pull_request.closed",
+  "pull_request.reopened",
+  "pull_request.synchronize",
+  "pull_request.ready_for_review",
+  "pull_request.labeled",
+  "pull_request_review.submitted",
+  "issues.opened",
+  "issues.closed",
+  "issues.reopened",
+  "issue_comment.created",
+  "release.published",
+  "workflow_run.completed",
+  "workflow_job.completed",
+  "check_suite.completed",
+  "check_run.completed",
+  "deployment.created",
+  "deployment_status.created",
 ]
 
 /** Accept JSON objects while excluding null and arrays. */
@@ -191,9 +181,9 @@ function validatePayload(eventName: keyof GitHubEvents, payload: Record<string, 
   if (!valid) throw new Error("GitHub payload does not match the event")
 }
 /** Native events/actions supported by this release. */
-export const githubEvents: readonly (keyof GitHubEvents)[] = Object.freeze([
-  "push", "ping", "create", "delete", ...ACTION_EVENTS.map(([, , eventName]) => eventName),
-] as (keyof GitHubEvents)[])
+export const githubEvents: readonly (keyof GitHubEvents)[] = /* @__PURE__ */ (() => Object.freeze([
+  "push", "ping", "create", "delete", ...ACTION_EVENTS,
+] as (keyof GitHubEvents)[]))()
 
 /** Create a GitHub JSON webhook provider without Octokit. */
 export function github(options: GitHubOptions): HibikiProvider<"github", GitHubEvents> {
@@ -220,7 +210,10 @@ export function github(options: GitHubOptions): HibikiProvider<"github", GitHubE
       const action = payload.action
       let eventName: keyof GitHubEvents | undefined
       if (event === "push" || event === "ping" || event === "create" || event === "delete") eventName = event
-      else eventName = ACTION_EVENTS.find(([name, expectedAction]) => event === name && action === expectedAction)?.[2]
+      else if (typeof action === "string") {
+        const candidate = `${event}.${action}` as keyof GitHubEvents
+        if (ACTION_EVENTS.includes(candidate)) eventName = candidate
+      }
       if (!eventName) return { kind: "unsupported", nativeEventName: event ?? undefined }
       if (allowedEvents && !allowedEvents.has(eventName)) throw new HibikiError("HIBIKI_VERIFICATION_FAILED", "GitHub event is not allowed", 400)
       validatePayload(eventName, payload)

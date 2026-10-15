@@ -37,5 +37,6 @@
     "typescript",
     "hibiki",
     "github"
-  ]
+  ],
+  "sideEffects": false
 }

@@ -23,6 +23,7 @@ export async function readBody(request: Request, maxBytes: number): Promise<Uint
       chunks.push(value)
     }
   } finally { reader.releaseLock() }
+  if (chunks.length === 1) return chunks[0]!.slice()
   const body = new Uint8Array(length)
   let offset = 0
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }

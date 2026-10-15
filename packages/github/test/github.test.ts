@@ -292,6 +292,15 @@ describe("Strict signature encoding", () => {
 
 
 describe("GitHub request edge cases", () => {
+  it.each([null, 1, ["opened"], { toString: "opened" }, "opened.extra"])("does not coerce or partially match action %j", async action => {
+    const app = new Hibiki().use(github({ secret: "secret" }))
+    let calls = 0
+    app.on("github.issues.opened", () => { calls++ })
+    const response = await app.handle(await githubRequest({ action, issue: { number: 1 }, repository: { full_name: "hibiki/repo" } }, "issues", "secret"), { provider: "github" })
+    expect(response.status).toBe(200)
+    expect(calls).toBe(0)
+  })
+
   it.each([undefined, "sha1=0123"])("rejects a missing or wrong signature scheme: %s", async signature => {
     const app = new Hibiki().use(github({ secret: "secret" }))
     let calls = 0

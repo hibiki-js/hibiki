@@ -73,7 +73,7 @@ const providers: ProviderCase[] = [
     async create(expired = false) {
       let calls = 0
       const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])
-      const publicKey = hex(await crypto.subtle.exportKey("raw", pair.publicKey))
+      const publicKey = hex(await crypto.subtle.exportKey("raw", pair.publicKey)).toUpperCase()
       const app = new Hibiki().use(discord({ publicKey }))
       app.on("discord.application_command", context => {
         equal(context.event.data?.name, "hello", "Discord command")
@@ -164,16 +164,25 @@ const cases: Case[] = [
 ]
 
 for (const provider of providers) {
-  cases.push({
-    name: `${provider.name}: accepts signed event and executes handler`,
-    async run() {
-      const fixture = await provider.create()
-      const response = await fixture.handle(await fixture.request())
-      equal(response.status, 200, "Success status")
-      equal(await response.text(), fixture.successBody, "Handler response")
-      equal(fixture.calls(), 1, "Verified handler calls")
-    },
-  })
+  for (const mixedCase of [false, true]) {
+    cases.push({
+      name: `${provider.name}: accepts ${mixedCase ? "mixed-case hex" : "signed event"} and executes handler`,
+      async run() {
+        const fixture = await provider.create()
+        const request = await fixture.request()
+        if (mixedCase) {
+          const header = request.headers.get(provider.signatureHeader)!
+          const offset = header.lastIndexOf("=") + 1
+          const signature = header.slice(offset).split("").map((char, index) => index % 2 ? char.toUpperCase() : char.toLowerCase()).join("")
+          request.headers.set(provider.signatureHeader, header.slice(0, offset) + signature)
+        }
+        const response = await fixture.handle(request)
+        equal(response.status, 200, "Success status")
+        equal(await response.text(), fixture.successBody, "Handler response")
+        equal(fixture.calls(), 1, "Verified handler calls")
+      },
+    })
+  }
   const variants = ["invalid signature", "tampered body", "missing signature"]
   if (provider.name !== "GitHub") variants.push("expired timestamp")
   if (provider.name === "GitHub") variants.push("unsupported content type")
