@@ -179,6 +179,22 @@ describe("Authenticated event idempotency", () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps a claim pending when releasing an unsuccessful Response fails", async () => {
+    const memory = createMemoryIdempotencyStore()
+    const release = vi.fn(async () => { throw new Error("storage failed") })
+    const handler = vi.fn(() => new Response(null, { status: 500 }))
+    const app = new Hibiki({ idempotencyStore: { ...memory, release } })
+      .use(eventProvider).on("example.ping", handler)
+    const response = await handle(app)
+    expect(response.status).toBe(503)
+    expect(await response.text()).toBe("HIBIKI_IDEMPOTENCY_UNAVAILABLE")
+    const retry = await handle(app)
+    expect(retry.status).toBe(503)
+    expect(await retry.text()).toBe("HIBIKI_EVENT_IN_PROGRESS")
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
   it("keeps successful effects claimed when completion storage fails", async () => {
     const memory = createMemoryIdempotencyStore()
     const release = vi.fn(memory.release)

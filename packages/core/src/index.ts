@@ -142,22 +142,22 @@ export class Hibiki<R extends Registry = {}> {
     let claim: { key: string; token: string } | undefined
     try {
       const provider = this.providers.get(options.provider)
-      if (!provider) throw new HibikiError("HIBIKI_PROVIDER_NOT_REGISTERED", "Provider is not registered", 500)
+      if (!provider) return new Response("HIBIKI_PROVIDER_NOT_REGISTERED", { status: 500 })
       const rawBody = await readBody(request, this.options.maxBodyBytes!)
       await provider.verify({ rawBody, headers: request.headers, request })
       const contentTypeHeader = request.headers.get("content-type")
       if (provider.contentTypes) {
         const contentType = contentTypeHeader?.split(";", 1)[0]?.trim().toLowerCase()
         if (!contentType || !provider.contentTypes.includes(contentType)) {
-          throw new HibikiError("HIBIKI_UNSUPPORTED_CONTENT_TYPE", "Unsupported content type", 415)
+          return new Response("HIBIKI_UNSUPPORTED_CONTENT_TYPE", { status: 415 })
         }
       }
       const text = decoder.decode(rawBody)
       let parsed: { kind: "supported"; eventName: string; event: unknown; id?: string } | { kind: "unsupported"; nativeEventName: string | undefined; id?: string }
       try { parsed = await provider.parse({ rawBody, text, headers: request.headers, request }) as typeof parsed }
-      catch (error) { if (error instanceof HibikiError) throw error; throw new HibikiError("HIBIKI_PARSE_FAILED", "Webhook payload could not be parsed", 400) }
+      catch (error) { if (error instanceof HibikiError) throw error; return new Response("HIBIKI_PARSE_FAILED", { status: 400 }) }
       if (parsed.kind === "unsupported") {
-        if (this.options.strictEvents) throw new HibikiError("HIBIKI_UNSUPPORTED_EVENT", "Unsupported event", 400)
+        if (this.options.strictEvents) return new Response("HIBIKI_UNSUPPORTED_EVENT", { status: 400 })
         return new Response(null, { status: 200 })
       }
       const handler = this.handlers.get(`${provider.name}.${parsed.eventName}`)
@@ -167,9 +167,9 @@ export class Hibiki<R extends Registry = {}> {
         const key = JSON.stringify([provider.name, parsed.id])
         let acquired
         try { acquired = await this.idempotencyStore.claim(key) }
-        catch { throw new HibikiError("HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Idempotency store unavailable", 503) }
+        catch { return new Response("HIBIKI_IDEMPOTENCY_UNAVAILABLE", { status: 503 }) }
         if (acquired.status === "completed") return new Response(null, { status: 204 })
-        if (acquired.status === "pending") throw new HibikiError("HIBIKI_EVENT_IN_PROGRESS", "Webhook event is in progress", 503)
+        if (acquired.status === "pending") return new Response("HIBIKI_EVENT_IN_PROGRESS", { status: 503 })
         claim = { key, token: acquired.token }
       }
       const context: HibikiContext = {
@@ -204,7 +204,7 @@ export class Hibiki<R extends Registry = {}> {
         try {
           if (response.ok) await this.idempotencyStore.complete(owned.key, owned.token)
           else await this.idempotencyStore.release(owned.key, owned.token)
-        } catch { throw new HibikiError("HIBIKI_IDEMPOTENCY_UNAVAILABLE", "Idempotency store unavailable", 503) }
+        } catch { return new Response("HIBIKI_IDEMPOTENCY_UNAVAILABLE", { status: 503 }) }
       }
       return response
     } catch (error) {

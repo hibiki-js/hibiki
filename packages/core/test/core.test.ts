@@ -13,6 +13,22 @@ const provider = defineProvider<"example", Events>({
 })
 
 describe("Hibiki", () => {
+  it("returns independent missing-provider responses before reading or verifying the body", async () => {
+    let verifications = 0
+    const app = new Hibiki().use({ ...provider, async verify() { verifications++ } })
+    const responses = []
+    for (let i = 0; i < 2; i++) {
+      const request = new Request("https://test", { method: "POST", body: "untouched" })
+      const response = await app.handle(request, { provider: "missing" as never })
+      expect(response.status).toBe(500)
+      expect(await response.text()).toBe("HIBIKI_PROVIDER_NOT_REGISTERED")
+      expect(await request.text()).toBe("untouched")
+      responses.push(response)
+    }
+    expect(responses[0]).not.toBe(responses[1])
+    expect(verifications).toBe(0)
+  })
+
   it("is an immutable provider builder and preserves the handler request body", async () => {
     const base = new Hibiki()
     const app = base.use(provider)
