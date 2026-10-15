@@ -16,6 +16,25 @@ The initial reference runtime is Node.js 22.23.3. Run each revision at least thr
 times, alternating their order, and compare medians across runs. Keep the JSON
 reports with the experiment; machine-specific results are not committed.
 
+## Core rejection paths
+
+Build this checkout and a separate baseline checkout with the same Node version
+and lockfile, then run:
+
+```sh
+node benchmarks/rejections.mjs --baseline /path/to/baseline --output benchmarks/results/rejections.json
+```
+
+The eight cases cover missing providers, signed requests with rejected content
+types, parse failures, strict unsupported events, pending claims, full stores,
+failed completion storage, and invalid signatures as an unchanged control.
+Each case alternates versions for 500 warmup and 1,500 measured operations.
+Small fixtures are signed and Requests constructed outside timing. Status,
+error body, handler counts and pending ownership are checked. Reports include
+p50/p95/mean microseconds and hashes of built Core modules. Use the existing
+normal webhook benchmark as well; faster rejection does not imply faster
+successful dispatch. Run comparisons at least three times.
+
 ## Timing
 
 `pnpm bench` defaults to 50 warmup operations and 500 measured operations per
