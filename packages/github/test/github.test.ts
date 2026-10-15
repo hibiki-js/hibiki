@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest"
+import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
 import { createGitHubWebhook, github, githubEvents } from "../src/index.js"
 import { readFileSync } from "node:fs"
@@ -336,5 +336,51 @@ describe("GitHub request edge cases", () => {
       expect(await response.text()).toBe("HIBIKI_PARSE_FAILED")
     }
     expect(seen).toEqual([42])
+  })
+})
+
+
+describe("GitHub large payload hashing", () => {
+  const payload = { ref: "refs/heads/main", repository: { full_name: "hibiki/repo" }, padding: "x".repeat(70_000) }
+  const input = (text: string, event = "push") => ({ text, rawBody: new TextEncoder().encode(text), headers: new Headers({ "x-github-event": event }), request: new Request("https://test") })
+
+  it("preserves the SHA-256 body ID for large supported payloads", async () => {
+    const data = input(JSON.stringify(payload))
+    const hash = await crypto.subtle.digest("SHA-256", data.rawBody)
+    const id = `body:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("")}`
+    const result = await github({ secret: "secret" }).parse(data)
+    expect(result).toEqual({ kind: "supported", eventName: "push", event: payload, id })
+  })
+
+  it("propagates hashing failures for supported payloads", async () => {
+    const error = new Error("digest unavailable")
+    const digest = vi.spyOn(crypto.subtle, "digest").mockRejectedValueOnce(error)
+    try {
+      await expect(github({ secret: "secret" }).parse(input(JSON.stringify(payload)))).rejects.toBe(error)
+      expect(digest).toHaveBeenCalledTimes(1)
+    } finally { digest.mockRestore() }
+  })
+
+  it.each(["malformed", "unsupported"])("does not speculate on small %s payloads", async kind => {
+    const digest = vi.spyOn(crypto.subtle, "digest")
+    try {
+      const result = github({ secret: "secret" }).parse(input(kind === "malformed" ? "[" : "{}", "unknown"))
+      if (kind === "malformed") await expect(result).rejects.toBeInstanceOf(SyntaxError)
+      else await expect(result).resolves.toEqual({ kind: "unsupported", nativeEventName: "unknown" })
+      expect(digest).not.toHaveBeenCalled()
+    } finally { digest.mockRestore() }
+  })
+
+  it.each(["malformed", "unsupported", "disallowed"])("settles failed speculative hashing without replacing %s results", async kind => {
+    const digest = vi.spyOn(crypto.subtle, "digest").mockRejectedValueOnce(new Error("digest unavailable"))
+    try {
+      const provider = github({ secret: "secret", ...(kind === "disallowed" ? { allowedEvents: ["ping"] as const } : {}) })
+      const text = kind === "malformed" ? "[" + " ".repeat(70_000) : JSON.stringify(payload)
+      const result = provider.parse(input(text, kind === "unsupported" ? "unknown" : "push"))
+      if (kind === "unsupported") await expect(result).resolves.toEqual({ kind: "unsupported", nativeEventName: "unknown" })
+      else if (kind === "malformed") await expect(result).rejects.toBeInstanceOf(SyntaxError)
+      else await expect(result).rejects.toMatchObject({ code: "HIBIKI_VERIFICATION_FAILED", status: 400 })
+      expect(digest).toHaveBeenCalledTimes(1)
+    } finally { digest.mockRestore() }
   })
 })

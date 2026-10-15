@@ -111,6 +111,38 @@ const coreProvider = defineProvider<"example", { ping: { value: string } }>({
 type Case = { name: string; run: () => Promise<void> }
 const cases: Case[] = [
   {
+    name: "GitHub: large signed payload keeps its authenticated ID and deduplicates",
+    async run() {
+      const payload = { ...githubPayload, padding: "x".repeat(70_000) }
+      const body = JSON.stringify(payload)
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body))
+      const id = `body:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("")}`
+      const app = new Hibiki().use(github({ secret }))
+      let calls = 0
+      app.on("github.issues.opened", context => {
+        equal(context.event.issue.number, 42, "Large payload event")
+        equal(context.id, id, "Authenticated body ID")
+        calls++
+      })
+      for (let delivery = 0; delivery < 2; delivery++) {
+        const response = await app.handle(await githubRequest(payload, "issues", secret), { provider: "github" })
+        equal(response.status, 204, "Large payload response")
+      }
+      equal(calls, 1, "Deduplicated large payload handler calls")
+    },
+  },
+  {
+    name: "GitHub: large unsupported payload settles hashing without dispatch",
+    async run() {
+      const app = new Hibiki().use(github({ secret }))
+      let calls = 0
+      app.on("github.issues.opened", () => { calls++ })
+      const response = await app.handle(await githubRequest({ ...githubPayload, padding: "x".repeat(70_000) }, "unknown", secret), { provider: "github" })
+      equal(response.status, 200, "Unsupported large payload response")
+      equal(calls, 0, "Unsupported large payload handler calls")
+    },
+  },
+  {
     name: "Core: registration, dispatch and custom Response",
     async run() {
       const base = new Hibiki()
