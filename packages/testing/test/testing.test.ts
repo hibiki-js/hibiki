@@ -14,6 +14,17 @@ const example = defineProvider<"example", Events>({
 })
 
 describe("testing helpers", () => {
+  it("preserves fixed HMAC-SHA256 signatures for Unicode JSON bodies", async () => {
+    const payload = { text: "日本語😀\u0000" }
+    const github = await githubRequest(payload, "push", "secret")
+    const stripe = await stripeRequest(payload, "secret", 1_700_000_000)
+    // Independent fixed vectors, including zeroes and both hex digits of each byte.
+    expect(github.headers.get("x-hub-signature-256")).toBe("sha256=3d6e6ff787c38649699566d1e1d628175f2fa26103388b56993bd458c6cc13ec")
+    expect(stripe.headers.get("stripe-signature")).toBe("t=1700000000,v1=fd8eaf849ee516f29584a82f083d24e7ca180aec03774237dcfa45da64eb1b4d")
+    expect(await github.text()).toBe(JSON.stringify(payload))
+    expect(await stripe.text()).toBe(JSON.stringify(payload))
+  })
+
   it("builds signed stripe and github requests", async () => {
     const stripe = await stripeRequest({ type: "invoice.paid" }, "secret", 1_700_000_000)
     expect(stripe.headers.get("stripe-signature")).toContain("t=1700000000")

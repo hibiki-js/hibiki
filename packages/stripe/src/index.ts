@@ -120,7 +120,7 @@ export function createStripeWebhook(url: string, options: StripeWebhookSenderOpt
       const body = JSON.stringify(event)
       const signedPayload = encoder.encode(`${timestampText}.${body}`)
       const key = await keyPromise
-      const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, signedPayload as BufferSource)), byte => byte.toString(16).padStart(2, "0")).join("")
+      const signature = hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, signedPayload as BufferSource)))
 
       return fetcher(endpoint, {
         method: "POST",
@@ -182,6 +182,13 @@ function isSupportedEvent(type: string): type is keyof StripeEvents {
 }
 
 const encoder = /* @__PURE__ */ new TextEncoder()
+
+function hex(bytes: Uint8Array): string {
+  const digits = "0123456789abcdef"
+  let result = ""
+  for (const byte of bytes) result += digits[byte >> 4]! + digits[byte & 15]!
+  return result
+}
 
 /** Decode exactly one SHA-256 digest; reject malformed signature encodings. */
 function fromHex(value: string): Uint8Array | undefined {
