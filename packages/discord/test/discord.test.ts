@@ -255,6 +255,20 @@ describe("Discord provider", () => {
     await dynamic
   })
 
+  it.each([true, false])("keeps the sent wait=%j when options change during fetch", async wait => {
+    const options: DiscordWebhookSendOptions = { wait }
+    const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      fetch: async input => {
+        expect(new URL(input.toString()).searchParams.get("wait")).toBe(String(wait))
+        // A reused options object may be changed while a request is pending.
+        await Promise.resolve()
+        options.wait = !wait
+        return wait ? Response.json({ id: "456", channel_id: "789" }) : new Response(null, { status: 204 })
+      },
+    })
+    expect(await webhook.send({}, options)).toEqual(wait ? { id: "456", channel_id: "789" } : undefined)
+  })
+
   it("rejects an unexpected empty response when waiting for a message", async () => {
     const webhook = createDiscordWebhook("https://discord.com/api/webhooks/123/token", {
       fetch: async () => new Response(null, { status: 204 }),

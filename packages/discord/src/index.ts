@@ -138,8 +138,9 @@ export function createDiscordWebhook(url: string, options: DiscordWebhookOptions
   function send(payload: DiscordWebhookPayload, sendOptions?: DiscordWebhookSendOptions & { wait?: true }): Promise<DiscordWebhookMessage>
   function send(payload: DiscordWebhookPayload, sendOptions?: DiscordWebhookSendOptions): Promise<DiscordWebhookMessage | undefined>
   async function send(payload: DiscordWebhookPayload, sendOptions: DiscordWebhookSendOptions = {}): Promise<DiscordWebhookMessage | undefined> {
+    const wait = sendOptions.wait ?? true
     const requestUrl = new URL(endpoint)
-    requestUrl.searchParams.set("wait", String(sendOptions.wait ?? true))
+    requestUrl.searchParams.set("wait", String(wait))
     if (sendOptions.threadId) requestUrl.searchParams.set("thread_id", sendOptions.threadId)
     if (payload.components) requestUrl.searchParams.set("with_components", "true")
     else requestUrl.searchParams.delete("with_components")
@@ -170,7 +171,7 @@ export function createDiscordWebhook(url: string, options: DiscordWebhookOptions
       throw new DiscordWebhookError(response.status, response.headers, body)
     }
 
-    if (sendOptions.wait === false) return undefined
+    if (!wait) return undefined
     if (response.status === 204) throw new Error("Discord webhook returned no message with wait=true")
     return await response.json() as DiscordWebhookMessage
   }
