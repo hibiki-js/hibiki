@@ -5,10 +5,11 @@ import { join } from "node:path"
 import { parseArgs } from "node:util"
 import { gzipSync, brotliCompressSync } from "node:zlib"
 import { build } from "tsup"
-import { environment } from "./environment.mjs"
+import { environment, assertEnvironmentUnchanged } from "./environment.mjs"
 
 const { values } = parseArgs({ options: { output: { type: "string" } } })
 const directory = await mkdtemp(join(tmpdir(), "hibiki-size-"))
+const measuredEnvironment = await environment()
 const results = []
 try {
   for (const fixture of ["core", "stripe-receive", "github-receive", "discord-receive", "discord-send"]) {
@@ -32,4 +33,5 @@ try {
 } finally {
   await rm(directory, { recursive: true, force: true })
 }
-if (values.output) await writeFile(values.output, JSON.stringify({ schemaVersion: 1, ...await environment(), results }, null, 2) + "\n")
+await assertEnvironmentUnchanged(measuredEnvironment)
+if (values.output) await writeFile(values.output, JSON.stringify({ schemaVersion: 1, ...measuredEnvironment, results }, null, 2) + "\n")

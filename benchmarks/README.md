@@ -39,7 +39,12 @@ The handler returns an empty 204 Response; it performs no application I/O.
 
 Reports include mean, p50, p95 and p99 operation latency in milliseconds and
 `opsPerSecond` (1000 / mean latency), plus runtime, CPU, platform, commit and dirty
-working-tree state, and SHA-256 hashes of the lockfile and built packages. Operations are sequential with concurrency 1. This is not
+working-tree state, and SHA-256 hashes of the lockfile and built packages.
+Metadata is captured before measurement. If the commit, dirty state, lockfile
+or built-package hashes change before completion, the command fails without
+writing a report. Rebuild and rerun after making changes.
+
+Operations are sequential with concurrency 1. This is not
 HTTP server throughput or end-to-end delivery latency. Fixture preparation and
 assertions can affect GC/scheduling; a difference between verify and handle is
 not an isolated measurement of parsing or body copying.

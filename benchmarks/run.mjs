@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { parseArgs } from "node:util"
 import { writeFile } from "node:fs/promises"
-import { environment } from "./environment.mjs"
+import { environment, assertEnvironmentUnchanged } from "./environment.mjs"
 import { createFixture } from "./fixtures.mjs"
 
 const { values } = parseArgs({ options: {
@@ -13,6 +13,7 @@ const iterations = Number(values.iterations)
 const warmup = Number(values.warmup)
 assert.ok(Number.isSafeInteger(iterations) && iterations > 0 && iterations <= 5000, "iterations must be 1..5000")
 assert.ok(Number.isSafeInteger(warmup) && warmup >= 0 && warmup <= 1000, "warmup must be 0..1000")
+const measuredEnvironment = await environment()
 const results = []
 for (const provider of ["stripe", "github", "discord"]) {
   for (const bytes of [1024, 10240, 102400]) {
@@ -37,9 +38,10 @@ for (const provider of ["stripe", "github", "discord"]) {
     }
   }
 }
+await assertEnvironmentUnchanged(measuredEnvironment)
 const report = {
   schemaVersion: 1,
-  ...await environment(),
+  ...measuredEnvironment,
   concurrency: 1, iterations, warmup, results,
 }
 if (values.output) await writeFile(values.output, JSON.stringify(report, null, 2) + "\n")
