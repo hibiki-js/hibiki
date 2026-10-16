@@ -68,11 +68,12 @@ jobs:
             return result
           }
           for(const name of ['core','stripe','github','discord','testing','hono']) {
-            const modules=[], built=[], types=[]
+            const modules=[], built=[], types=[], initializers=[]
             for(const [variant,root] of [['baseline','../baseline'],['candidate','.']]) {
               const file=resolve(root,`packages/${name}/dist/index.js`)
               const code=await readFile(file)
               built.push(declarations(code.toString(),'js'))
+              initializers.push(ts.createSourceFile('index.js',code.toString(),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS).statements.filter(ts.isVariableStatement).flatMap(node=>node.declarationList.declarations.map(declaration=>declaration.name.text)))
               types.push(declarations(await readFile(resolve(root,`packages/${name}/dist/index.d.ts`),'utf8'),'ts'))
               modules.push(await import(pathToFileURL(file).href))
               const destination=resolve(process.env.RUNNER_TEMP,variant)
@@ -88,9 +89,10 @@ jobs:
                 assert.ok(Object.isFrozen(modules[1][key]))
               }
             }
+            assert.deepEqual(initializers[0],initializers[1],name+' initializer order changed')
             assert.deepEqual(built[0],built[1],name+' runtime declaration changed')
             assert.deepEqual(types[0],types[1],name+' type declaration changed')
-            equivalence.push({name,runtimeDeclarations:Object.keys(built[0]),typeDeclarations:Object.keys(types[0]),exports:Object.keys(modules[0])})
+            equivalence.push({name,initializers:initializers[0],runtimeDeclarations:Object.keys(built[0]),typeDeclarations:Object.keys(types[0]),exports:Object.keys(modules[0])})
           }
           console.log(results)
           await writeFile('benchmarks/results/equivalence.json',JSON.stringify(equivalence,null,2)+'\n')
@@ -99,10 +101,14 @@ jobs:
           pnpm --dir ../baseline bench:size --output=benchmarks/results/size-baseline.json
           pnpm bench:size --output=benchmarks/results/size-candidate.json
           cp ../baseline/benchmarks/results/size-baseline.json benchmarks/results/
+      - name: Prepare identical-code control
+        run: cp -a ../baseline ../control
       - name: Repeated alternating latency comparisons
         run: |
           node benchmarks/compare.mjs --baseline ../baseline --warmup=1 --iterations=3 --output=benchmarks/results/smoke.json
           for run in 1 2 3; do
+            (cd ../control && node ../candidate/benchmarks/encoding.mjs --baseline ../baseline --output=../candidate/benchmarks/results/aa-encoding-$run.json)
+            (cd ../control && node ../candidate/benchmarks/discord-send.mjs --baseline ../baseline --output=../candidate/benchmarks/results/aa-discord-send-$run.json)
             node benchmarks/compare.mjs --baseline ../baseline --output=benchmarks/results/paired-$run.json
             node benchmarks/encoding.mjs --baseline ../baseline --output=benchmarks/results/encoding-$run.json
             node benchmarks/discord-send.mjs --baseline ../baseline --output=benchmarks/results/discord-send-$run.json
