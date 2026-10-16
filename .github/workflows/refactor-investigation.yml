@@ -81,6 +81,7 @@ jobs:
               const pack=JSON.parse(execFileSync('npm',['pack','--json','--ignore-scripts','--pack-destination',destination],{cwd:resolve(root,`packages/${name}`),encoding:'utf8'}))[0]
               results.push({name,variant,javascriptBytes:code.length,tarballBytes:pack.size,unpackedBytes:pack.unpackedSize,integrity:pack.integrity})
             }
+            if(['core','discord'].includes(name)) assert.equal(await readFile(`../baseline/packages/${name}/dist/index.js`,'utf8'),await readFile(`packages/${name}/dist/index.js`,'utf8'),name+' runtime must be byte-identical')
             assert.deepEqual(Object.keys(modules[0]),Object.keys(modules[1]))
             for(const key of Object.keys(modules[0])) {
               if(typeof modules[0][key]==='function') assert.equal(modules[0][key].name,modules[1][key].name)
