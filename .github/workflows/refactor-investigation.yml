@@ -1,0 +1,118 @@
+name: Refactor investigation
+on:
+  push:
+    branches: [codex/refactor-investigation-ci]
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: candidate
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: 94886e5b43036b7448b07da261bed51cb3dbe270
+          path: baseline
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.4.1
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+      - name: Build identical dependencies and both revisions
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir ../baseline install --frozen-lockfile
+          pnpm --dir ../baseline build
+          pnpm build
+      - name: Validate behavior
+        run: |
+          pnpm check:dependencies
+          pnpm check:agent-docs
+          pnpm check:evals
+          pnpm typecheck
+          pnpm check:examples
+          pnpm test:coverage
+          pnpm typecheck:runtime
+          pnpm test:workerd
+          pnpm docs:build
+      - name: Measure distribution and compare public exports
+        run: |
+          mkdir -p benchmarks/results ../baseline/benchmarks/results
+          node --input-type=module <<'JS'
+          import ts from 'typescript'
+          import assert from 'node:assert/strict'
+          import {readFile,mkdir,writeFile} from 'node:fs/promises'
+          import {execFileSync} from 'node:child_process'
+          import {resolve} from 'node:path'
+          import {pathToFileURL} from 'node:url'
+          const results=[], equivalence=[]
+          const printer=ts.createPrinter({removeComments:true})
+          function declarations(text,kind) {
+            const source=ts.createSourceFile('index.'+kind,text,ts.ScriptTarget.Latest,true,kind==='js'?ts.ScriptKind.JS:ts.ScriptKind.TS)
+            const result={}
+            for(const node of source.statements) {
+              if(ts.isVariableStatement(node)) for(const declaration of node.declarationList.declarations) result[declaration.name.text]=printer.printNode(ts.EmitHint.Unspecified,declaration,source)
+              else if(node.name) result[node.name.text]=printer.printNode(ts.EmitHint.Unspecified,node,source)
+              else if(ts.isExportDeclaration(node)) result.exports=printer.printNode(ts.EmitHint.Unspecified,node,source)
+            }
+            return result
+          }
+          for(const name of ['core','stripe','github','discord','testing','hono']) {
+            const modules=[], built=[], types=[]
+            for(const [variant,root] of [['baseline','../baseline'],['candidate','.']]) {
+              const file=resolve(root,`packages/${name}/dist/index.js`)
+              const code=await readFile(file)
+              built.push(declarations(code.toString(),'js'))
+              types.push(declarations(await readFile(resolve(root,`packages/${name}/dist/index.d.ts`),'utf8'),'ts'))
+              modules.push(await import(pathToFileURL(file).href))
+              const destination=resolve(process.env.RUNNER_TEMP,variant)
+              await mkdir(destination,{recursive:true})
+              const pack=JSON.parse(execFileSync('npm',['pack','--json','--ignore-scripts','--pack-destination',destination],{cwd:resolve(root,`packages/${name}`),encoding:'utf8'}))[0]
+              results.push({name,variant,javascriptBytes:code.length,tarballBytes:pack.size,unpackedBytes:pack.unpackedSize,integrity:pack.integrity})
+            }
+            assert.deepEqual(Object.keys(modules[0]),Object.keys(modules[1]))
+            for(const key of Object.keys(modules[0])) {
+              if(typeof modules[0][key]==='function') assert.equal(modules[0][key].name,modules[1][key].name)
+              else if(Array.isArray(modules[0][key])) {
+                assert.deepEqual(modules[0][key],modules[1][key])
+                assert.ok(Object.isFrozen(modules[1][key]))
+              }
+            }
+            assert.deepEqual(built[0],built[1],name+' runtime declaration changed')
+            assert.deepEqual(types[0],types[1],name+' type declaration changed')
+            equivalence.push({name,runtimeDeclarations:Object.keys(built[0]),typeDeclarations:Object.keys(types[0]),exports:Object.keys(modules[0])})
+          }
+          console.log(results)
+          await writeFile('benchmarks/results/equivalence.json',JSON.stringify(equivalence,null,2)+'\n')
+          await writeFile('benchmarks/results/distribution.json',JSON.stringify(results,null,2)+'\n')
+          JS
+          pnpm --dir ../baseline bench:size --output=benchmarks/results/size-baseline.json
+          pnpm bench:size --output=benchmarks/results/size-candidate.json
+          cp ../baseline/benchmarks/results/size-baseline.json benchmarks/results/
+      - name: Repeated alternating latency comparisons
+        run: |
+          node benchmarks/compare.mjs --baseline ../baseline --warmup=1 --iterations=3 --output=benchmarks/results/smoke.json
+          for run in 1 2 3; do
+            node benchmarks/compare.mjs --baseline ../baseline --output=benchmarks/results/paired-$run.json
+            node benchmarks/encoding.mjs --baseline ../baseline --output=benchmarks/results/encoding-$run.json
+            node benchmarks/discord-send.mjs --baseline ../baseline --output=benchmarks/results/discord-send-$run.json
+            node benchmarks/rejections.mjs --baseline ../baseline --output=benchmarks/results/rejections-$run.json
+            node benchmarks/idempotency.mjs --baseline ../baseline --output=benchmarks/results/idempotency-$run.json
+          done
+      - name: Retained heap comparison
+        run: node benchmarks/idempotency-memory.mjs --baseline ../baseline --output=benchmarks/results/memory.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: refactor-investigation
+          path: candidate/benchmarks/results/
