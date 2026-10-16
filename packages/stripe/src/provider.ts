@@ -57,7 +57,7 @@ export function stripe(options: StripeOptions): HibikiProvider<"stripe", StripeE
           kind: "supported",
           eventName: event.type,
           event: payload as StripeEvents[typeof event.type],
-          ...(id ? { id } : {}),
+          id,
         } as SupportedParseResult<StripeEvents>
       }
       return { kind: "unsupported", nativeEventName: typeof event.type === "string" ? event.type : undefined, ...(id ? { id } : {}) }

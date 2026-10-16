@@ -49,6 +49,23 @@ describe("Stripe provider", () => {
     }, { timestamp: -1 })).rejects.toThrow("timestamp")
   })
 
+  it("uses the current timestamp when outbound send options are omitted", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    let calls = 0
+    app.on("stripe.invoice.paid", () => { calls++ })
+    const sender = createStripeWebhook("https://hibiki.test/webhook", {
+      secret: "secret",
+      fetch: async (input, init) => app.handle(new Request(input, init), { provider: "stripe" }),
+    })
+    const response = await sender.send({
+      id: "evt_default_timestamp",
+      type: "invoice.paid",
+      data: { object: { id: "in_1", object: "invoice" } },
+    })
+    expect(response.status).toBe(204)
+    expect(calls).toBe(1)
+  })
+
   it("accepts a signed supported event", async () => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
     let seen = ""
@@ -131,6 +148,14 @@ describe("Stripe provider", () => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
     const response = await app.handle(await stripeRequest({ id: "evt_3", type: "radar.early_fraud_warning.created", data: { object: { id: "issfr_1" } } }, "secret"), { provider: "stripe" })
     expect(response.status).toBe(200)
+  })
+
+  it("parses unsupported events without inventing an event ID", async () => {
+    const provider = stripe({ secret: "secret" })
+    const text = JSON.stringify({ type: "unknown.event", data: { object: {} } })
+    const result = await provider.parse({ text, rawBody: new TextEncoder().encode(text), headers: new Headers(), request: new Request("https://test") })
+    expect(result).toEqual({ kind: "unsupported", nativeEventName: "unknown.event" })
+    expect(result).not.toHaveProperty("id")
   })
 
   it("supports emitEvent helpers and narrows checkout session types", async () => {
@@ -255,6 +280,17 @@ describe("Strict signature encoding", () => {
 
 
 describe("Stripe signature candidates", () => {
+  it("ignores unknown signature versions and retains the first timestamp", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    let calls = 0
+    app.on("stripe.invoice.paid", () => { calls++ })
+    const request = await stripeRequest({ id: "evt_header_fields", type: "invoice.paid", data: { object: {} } }, "secret")
+    const header = request.headers.get("stripe-signature")!
+    request.headers.set("stripe-signature", `${header},v0=ignored,t=0`)
+    expect((await app.handle(request, { provider: "stripe" })).status).toBe(204)
+    expect(calls).toBe(1)
+  })
+
   it.each(["v1=zz", `v1=${"0".repeat(64)}`])("accepts a valid rotated signature after %s", async invalid => {
     const app = new Hibiki().use(stripe({ secret: "secret" }))
     let calls = 0
