@@ -1,4 +1,4 @@
-import { HibikiError } from "./index.js"
+import { HibikiError } from "./errors.js"
 
 /** Bound actual stream bytes; Content-Length alone is not trustworthy. */
 export async function readBody(request: Request, maxBytes: number): Promise<Uint8Array> {
