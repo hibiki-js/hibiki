@@ -9,7 +9,16 @@ This repository is a pnpm workspace:
 - `packages/core` contains the provider-independent webhook router and shared types.
 - `packages/stripe`, `packages/github`, and `packages/discord` implement provider-specific verification, parsing, and event types.
 - `packages/hono` provides a Hono integration, and `packages/testing` provides webhook test utilities.
+- `internal` contains shared encoding helpers bundled into each consuming package.
 - `examples` contains integration examples, and `docs` contains the English and Japanese documentation.
+
+Package entry points expose the public API, with data contracts in `types.ts`.
+Stripe and GitHub keep receiving logic in `provider.ts`, outgoing clients in
+`sender.ts`, and event catalogs in `events.ts`. Testing separates its harness,
+request builders, and signing helpers. Core and Discord keep runtime code in
+`index.ts`. Shared encoding helpers remain dependency-free and bundled into each
+package's `dist/index.js`. Preserve runtime initialization order when moving
+declarations between modules.
 
 ## Development setup
 
