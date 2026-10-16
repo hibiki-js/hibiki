@@ -8,7 +8,7 @@ for (const [provider, interfaceName, format, source] of [
   ["github", "GitHubEvents", "application/json webhook deliveries; event/action pairs are curated", "https://docs.github.com/en/webhooks/webhook-events-and-payloads"],
   ["discord", "DiscordEvents", "signed Discord Interactions (incoming webhooks are a separate outgoing API)", "https://discord.com/developers/docs/interactions/receiving-and-responding"],
 ]) {
-  const text = await readFile(`packages/${provider}/src/index.ts`, "utf8")
+  const text = await readFile(`packages/${provider}/src/types.ts`, "utf8")
   const ast = ts.createSourceFile(`${provider}.ts`, text, ts.ScriptTarget.Latest, true)
   const definition = ast.statements.find(node => ts.isInterfaceDeclaration(node) && node.name.text === interfaceName)
   if (!definition) throw new Error(`Missing ${interfaceName}`)
