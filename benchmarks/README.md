@@ -138,7 +138,7 @@ Build artifacts use a temporary directory and are removed after measurement.
 These are consumer bundle sizes, not npm tarball or installed dependency sizes.
 Compare with the same lockfile, build options and Node.js version.
 
-Core and the receiving-provider packages use `--minify-syntax` to reduce published
+The receiving-provider packages use `--minify-syntax` to reduce published
 JavaScript while retaining readable identifiers and pure annotations. Check both
 published artifacts (`npm pack --json --ignore-scripts` in each package) and these
 consumer fixtures when changing build flags. Whitespace/full minification can
