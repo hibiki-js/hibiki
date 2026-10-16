@@ -63,6 +63,19 @@ Metadata is captured before measurement. If the commit, dirty state, lockfile
 or built-package hashes change before completion, the command fails without
 writing a report. Rebuild and rerun after making changes.
 
+For comparisons, build a separate baseline checkout with the same lockfile and
+fixtures, then alternate baseline and candidate for each operation:
+
+```sh
+node benchmarks/compare.mjs --baseline /path/to/baseline --output benchmarks/results/comparison.json
+```
+
+This uses the same 18 cases with 500 warmup and 1,500 measured operations per
+version by default. `--warmup` and `--iterations` accept the same bounds as
+`pnpm bench`. Both builds' hashes are checked before writing the report. Run at
+least three times and compare medians across runs; alternating does not remove
+background load or establish a speed improvement from small timing differences.
+
 Operations are sequential with concurrency 1. This is not
 HTTP server throughput or end-to-end delivery latency. Fixture preparation and
 assertions can affect GC/scheduling; a difference between verify and handle is
@@ -124,6 +137,14 @@ Build artifacts use a temporary directory and are removed after measurement.
 
 These are consumer bundle sizes, not npm tarball or installed dependency sizes.
 Compare with the same lockfile, build options and Node.js version.
+
+The receiving-provider packages use `--minify-syntax` to reduce published
+JavaScript while retaining readable identifiers and pure annotations. Check both
+published artifacts (`npm pack --json --ignore-scripts` in each package) and these
+consumer fixtures when changing build flags. Whitespace/full minification can
+remove pure annotations; syntax minification can inline annotated IIFEs. Either
+can retain unused event catalogs in sender-only bundles. GitHub's event catalog
+annotates `Object.freeze` and `concat` separately to survive syntax minification.
 
 ## Discord sender URL normalization
 

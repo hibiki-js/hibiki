@@ -187,10 +187,11 @@ function validatePayload(eventName: keyof GitHubEvents, payload: Record<string, 
   }
   if (!valid) throw new Error("GitHub payload does not match the event")
 }
+// Annotate both calls so syntax minification preserves sender-only tree shaking.
 /** Native events/actions supported by this release. */
-export const githubEvents: readonly (keyof GitHubEvents)[] = /* @__PURE__ */ (() => Object.freeze([
-  "push", "ping", "create", "delete", ...ACTION_EVENTS,
-] as (keyof GitHubEvents)[]))()
+export const githubEvents: readonly (keyof GitHubEvents)[] = /* @__PURE__ */ Object.freeze(
+  /* @__PURE__ */ (["push", "ping", "create", "delete"] as (keyof GitHubEvents)[]).concat(ACTION_EVENTS),
+)
 
 /** Create a GitHub JSON webhook provider without Octokit. */
 export function github(options: GitHubOptions): HibikiProvider<"github", GitHubEvents> {
