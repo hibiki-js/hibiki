@@ -1,6 +1,6 @@
-export { discord } from "./provider.js"
-export { createDiscordWebhook } from "./sender.js"
 export { DiscordWebhookError } from "./errors.js"
+export { createDiscordWebhook } from "./sender.js"
+export { discord } from "./provider.js"
 export type {
   DiscordInteractionType,
   DiscordInteraction,

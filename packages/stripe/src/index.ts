@@ -1,6 +1,6 @@
-export { stripe } from "./provider.js"
-export { createStripeWebhook } from "./sender.js"
 export { stripeEvents } from "./events.js"
+export { createStripeWebhook } from "./sender.js"
+export { stripe } from "./provider.js"
 export type {
   StripeCheckoutSession,
   StripePaymentIntent,

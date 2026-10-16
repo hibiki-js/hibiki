@@ -17,6 +17,7 @@ Package `src/index.ts` files define the public exports. Keep data contracts in
 Core keeps its builder and dispatcher in `app.ts`; body reading and idempotency
 import the shared error class directly from `errors.ts`. Shared encoding helpers
 must remain dependency-free and bundled into each package's `dist/index.js`.
+Preserve runtime initialization order when moving declarations between modules.
 
 ## Development setup
 
