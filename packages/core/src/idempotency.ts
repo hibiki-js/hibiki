@@ -1,4 +1,4 @@
-import { HibikiError } from "./errors.js"
+import { HibikiError } from "./index.js"
 
 export type IdempotencyClaim =
   | { status: "acquired"; token: string }
