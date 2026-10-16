@@ -1,7 +1,7 @@
 /**
  * Placeholder for future provider type generation.
  *
- * v0.1 ships curated event maps in packages/*/src/types.ts.
+ * v0.1 ships curated event maps in packages/<provider>/src/types.ts.
  * When expanding coverage, generate committed files under
  * packages/<provider>/src/generated/ and keep runtime deps at zero.
  *
