@@ -15,7 +15,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v7
         with:
-          ref: b98f11c
+          ref: b98f11c1ec7578d6231434c823621f222f38b0c6
           path: baseline
           persist-credentials: false
       - uses: pnpm/action-setup@v6
