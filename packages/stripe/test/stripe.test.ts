@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { Hibiki } from "@hibiki-js/core"
-import { createStripeWebhook, stripe, stripeEvents } from "../src/index.js"
+import { createStripeWebhook, stripe, stripeEvents, type StripePaymentIntent, type StripeRefund, type StripeWebhookEvent } from "../src/index.js"
 import { readFileSync } from "node:fs"
 import { createWebhookTest, stripeRequest } from "@hibiki-js/testing"
 
@@ -47,6 +47,37 @@ describe("Stripe provider", () => {
       type: "invoice.paid",
       data: { object: { id: "in_1", object: "invoice" } },
     }, { timestamp: -1 })).rejects.toThrow("timestamp")
+  })
+
+  it("sends and routes payment progress and failed refund events with typed payloads", async () => {
+    const app = new Hibiki().use(stripe({ secret: "secret" }))
+    const seen: StripeWebhookEvent[] = []
+    app.on("stripe.payment_intent.processing", ({ event }) => {
+      expectTypeOf(event.type).toEqualTypeOf<"payment_intent.processing">()
+      expectTypeOf(event.data.object).toEqualTypeOf<StripePaymentIntent>()
+      seen.push(event)
+    })
+    app.on("stripe.payment_intent.partially_funded", ({ event }) => {
+      expectTypeOf(event.type).toEqualTypeOf<"payment_intent.partially_funded">()
+      expectTypeOf(event.data.object).toEqualTypeOf<StripePaymentIntent>()
+      seen.push(event)
+    })
+    app.on("stripe.refund.failed", ({ event }) => {
+      expectTypeOf(event.type).toEqualTypeOf<"refund.failed">()
+      expectTypeOf(event.data.object).toEqualTypeOf<StripeRefund>()
+      seen.push(event)
+    })
+    const sender = createStripeWebhook("https://hibiki.test/webhook", {
+      secret: "secret",
+      fetch: async (input, init) => app.handle(new Request(input, init), { provider: "stripe" }),
+    })
+    const events: StripeWebhookEvent[] = [
+      { id: "evt_processing", type: "payment_intent.processing", data: { object: { id: "pi_processing", object: "payment_intent", status: "processing" } } },
+      { id: "evt_partially_funded", type: "payment_intent.partially_funded", data: { object: { id: "pi_partial", object: "payment_intent", amount: 1000, amount_received: 500 } } },
+      { id: "evt_refund_failed", type: "refund.failed", data: { object: { id: "re_failed", object: "refund", status: "failed", failure_reason: "lost_or_stolen_card" } } },
+    ]
+    for (const event of events) expect((await sender.send(event)).status).toBe(204)
+    expect(seen).toEqual(events)
   })
 
   it("uses the current timestamp when outbound send options are omitted", async () => {

@@ -31,6 +31,8 @@ This provider supports **snapshot events** with `data.object`, not thin events. 
 - `payment_intent.payment_failed`
 - `payment_intent.canceled`
 - `payment_intent.requires_action`
+- `payment_intent.processing`
+- `payment_intent.partially_funded`
 
 ### Invoice
 
@@ -63,6 +65,7 @@ This provider supports **snapshot events** with `data.object`, not thin events. 
 - `charge.dispute.closed`
 - `refund.created`
 - `refund.updated`
+- `refund.failed`
 - `payment_method.attached`
 - `payment_method.detached`
 
