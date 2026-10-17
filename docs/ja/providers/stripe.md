@@ -31,6 +31,8 @@ const app = new Hibiki().use(stripe({
 - `payment_intent.payment_failed`
 - `payment_intent.canceled`
 - `payment_intent.requires_action`
+- `payment_intent.processing`
+- `payment_intent.partially_funded`
 
 ### Invoice
 
@@ -63,6 +65,7 @@ const app = new Hibiki().use(stripe({
 - `charge.dispute.closed`
 - `refund.created`
 - `refund.updated`
+- `refund.failed`
 - `payment_method.attached`
 - `payment_method.detached`
 

@@ -59,6 +59,8 @@ export interface StripeEvents {
   "payment_intent.payment_failed": StripeEvent<"payment_intent.payment_failed", StripePaymentIntent>
   "payment_intent.canceled": StripeEvent<"payment_intent.canceled", StripePaymentIntent>
   "payment_intent.requires_action": StripeEvent<"payment_intent.requires_action", StripePaymentIntent>
+  "payment_intent.processing": StripeEvent<"payment_intent.processing", StripePaymentIntent>
+  "payment_intent.partially_funded": StripeEvent<"payment_intent.partially_funded", StripePaymentIntent>
   "invoice.paid": StripeEvent<"invoice.paid", StripeInvoice>
   "invoice.payment_failed": StripeEvent<"invoice.payment_failed", StripeInvoice>
   "invoice.payment_action_required": StripeEvent<"invoice.payment_action_required", StripeInvoice>
@@ -82,6 +84,7 @@ export interface StripeEvents {
   "charge.dispute.closed": StripeEvent<"charge.dispute.closed", StripeDispute>
   "refund.created": StripeEvent<"refund.created", StripeRefund>
   "refund.updated": StripeEvent<"refund.updated", StripeRefund>
+  "refund.failed": StripeEvent<"refund.failed", StripeRefund>
   "setup_intent.succeeded": StripeEvent<"setup_intent.succeeded", StripeSetupIntent>
   "payment_method.attached": StripeEvent<"payment_method.attached", StripePaymentMethod>
   "payment_method.detached": StripeEvent<"payment_method.detached", StripePaymentMethod>
